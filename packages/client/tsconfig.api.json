@@ -1,7 +1,8 @@
 {
     "extends": "./tsconfig.json",
     "compilerOptions": {
+        "outDir": "./out",
         "emitDeclarationOnly": true
     },
-    "files": ["src/extensionApi.ts"]
+    "files": ["src/extensionApi.mts"]
 }

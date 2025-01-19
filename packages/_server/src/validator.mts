@@ -1,40 +1,32 @@
-import { createTextDocument, DocumentValidator } from 'cspell-lib';
+import { getDictionary, Text as TextUtil } from 'cspell-lib';
 import type { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Diagnostic } from 'vscode-languageserver-types';
 import { DiagnosticSeverity } from 'vscode-languageserver-types';
 
-import type { CSpellUserSettings } from './config/cspellConfig/index.mjs';
+import type { SpellCheckerDiagnosticData, SpellingDiagnostic, Suggestion } from './api.js';
+import type { CSpellUserAndExtensionSettings } from './config/cspellConfig/index.mjs';
 import { diagnosticSource } from './constants.mjs';
-import type { DiagnosticData } from './models/DiagnosticData.mjs';
+import { createDocumentValidator } from './DocumentValidationController.mjs';
 
 export { createTextDocument, validateText } from 'cspell-lib';
 
 export const diagnosticCollectionName = diagnosticSource;
 export const diagSource = diagnosticCollectionName;
-export const defaultCheckLimit = 500;
 
-const diagSeverityMap = new Map<string, DiagnosticSeverity>([
+const diagSeverityMap = new Map<string, DiagnosticSeverity | undefined>([
     ['error', DiagnosticSeverity.Error],
     ['warning', DiagnosticSeverity.Warning],
     ['information', DiagnosticSeverity.Information],
     ['hint', DiagnosticSeverity.Hint],
+    ['off', undefined],
 ]);
 
-export async function validateTextDocument(textDocument: TextDocument, options: CSpellUserSettings): Promise<Diagnostic[]> {
-    const { diagnosticLevel = DiagnosticSeverity.Information.toString() } = options;
-    const severity = diagSeverityMap.get(diagnosticLevel.toLowerCase()) || DiagnosticSeverity.Information;
-    const limit = (options.checkLimit || defaultCheckLimit) * 1024;
-    const content = textDocument.getText().slice(0, limit);
-    const docInfo = {
-        uri: textDocument.uri,
-        content,
-        languageId: textDocument.languageId,
-        version: textDocument.version,
-    };
-    const doc = createTextDocument(docInfo);
-    const docVal = new DocumentValidator(doc, { noConfigSearch: true }, options);
-    await docVal.prepare();
+export async function validateTextDocument(textDocument: TextDocument, options: CSpellUserAndExtensionSettings): Promise<Diagnostic[]> {
+    const { severity, severityFlaggedWords } = calcSeverity(textDocument.uri, options);
+    const docVal = await createDocumentValidator(textDocument, options);
     const r = await docVal.checkDocumentAsync(true);
+    const strictMode = options.reportUnknownWords ?? true;
+    const dictionary = await getDictionary(options);
     const diags = r
         // Convert the offset into a position
         .map((issue) => ({ ...issue, position: textDocument.positionAt(issue.offset) }))
@@ -45,13 +37,54 @@ export async function validateTextDocument(textDocument: TextDocument, options: 
                 start: issue.position,
                 end: { ...issue.position, character: issue.position.character + (issue.length ?? issue.text.length) },
             },
+            severity: issue.isFlagged ? severityFlaggedWords : severity,
         }))
         // Convert it to a Diagnostic
-        .map(({ text, range, isFlagged, message, issueType, suggestions, suggestionsEx }) => {
-            const diagMessage = `"${text}": ${message ?? `${isFlagged ? 'Forbidden' : 'Unknown'} word`}.`;
+        .map(({ text, range, isFlagged, message, issueType, suggestions, suggestionsEx, severity }) => {
+            const isKnown = suggestionsEx?.some((sug) => sug.isPreferred) || false;
+            const diagMessage = `"${text}": ${message ?? `${isFlagged ? 'Forbidden' : isKnown ? 'Misspelled' : 'Unknown'} word`}.`;
             const sugs = suggestionsEx || suggestions?.map((word) => ({ word }));
-            const data: DiagnosticData = { issueType, suggestions: sugs };
-            return { severity, range, message: diagMessage, source: diagSource, data };
-        });
+
+            let useStrict = strictMode;
+            if (!useStrict) {
+                // turn strict on if there are simple suggestions.
+                const s = dictionary.suggest(text, { numSuggestions: 1, numChanges: 1.8, compoundMethod: 0 });
+                // console.log('%o', { s });
+                useStrict = s.some((sug) => sug.cost < 200);
+            }
+
+            const data: SpellCheckerDiagnosticData = {
+                text,
+                issueType,
+                isFlagged,
+                isKnown,
+                isSuggestion: undefined, // This is a future enhancement to CSpell.
+                strict: useStrict,
+                suggestions: haveSuggestionsMatchCase(text, sugs),
+            };
+            const diag: SpellingDiagnostic = { severity, range, message: diagMessage, source: diagSource, data };
+            return diag;
+        })
+        .filter((diag) => !!diag.severity);
+
     return diags;
+}
+
+function haveSuggestionsMatchCase(example: string, suggestions: Suggestion[] | undefined): Suggestion[] | undefined {
+    if (!suggestions || TextUtil.isLowerCase(example)) return suggestions;
+    return suggestions.map((sug) => (TextUtil.isLowerCase(sug.word) ? { ...sug, word: TextUtil.matchCase(example, sug.word) } : sug));
+}
+
+type SeverityOptions = Pick<CSpellUserAndExtensionSettings, 'diagnosticLevel' | 'diagnosticLevelFlaggedWords'>;
+
+interface Severity {
+    severity: DiagnosticSeverity | undefined;
+    severityFlaggedWords: DiagnosticSeverity | undefined;
+}
+
+function calcSeverity(_docUri: string, options: SeverityOptions): Severity {
+    const { diagnosticLevel = 'Information', diagnosticLevelFlaggedWords } = options;
+    const severity = diagSeverityMap.get(diagnosticLevel.toLowerCase());
+    const severityFlaggedWords = diagSeverityMap.get((diagnosticLevelFlaggedWords || diagnosticLevel).toLowerCase());
+    return { severity, severityFlaggedWords };
 }

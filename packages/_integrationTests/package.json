@@ -11,6 +11,7 @@
     "clean": "shx rm -rf out temp",
     "build-production": "npm run build",
     "test-integration-vscode": "node ./out/runTests.mjs",
+    "test-integration-insiders": "VSCODE_VERSION=insiders node ./out/runTests.mjs",
     "test-integration": "npm run build2 && npm run test-integration-vscode",
     "test": "echo Run test-integration"
   },
@@ -23,25 +24,25 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@cspell/cspell-types": "^7.3.6",
-    "@types/chai": "^4.3.6",
-    "@types/decompress": "^4.2.5",
-    "@types/glob": "^8.1.0",
-    "@types/mocha": "^10.0.1",
-    "@types/node": "^18.18.0",
-    "chai": "^4.3.8",
-    "cross-env": "^7.0.3",
-    "kefir": "^3.8.8"
+    "@cspell/cspell-types": "^8.17.2",
+    "@cspell/dict-de-de": "^4.0.3",
+    "@types/chai": "^5.0.1",
+    "@types/decompress": "^4.2.7",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.17.14",
+    "chai": "^5.1.2",
+    "cross-env": "^7.0.3"
   },
   "peerDependenciesMeta": {},
   "dependencies": {
-    "@vscode/test-electron": "^2.3.4",
-    "chalk": "^5.3.0",
+    "@vscode/test-electron": "^2.4.1",
+    "chalk": "^5.4.1",
     "decompress": "^4.2.1",
-    "glob": "^10.3.9",
-    "mocha": "^10.2.0"
+    "glob": "^11.0.1",
+    "kefir": "^3.8.8",
+    "mocha": "^11.1.0"
   },
   "engines": {
-    "node": ">18.0.0"
+    "node": ">20.0.0"
   }
 }

@@ -58,9 +58,7 @@ export interface ConfigTargetCSpell extends TargetBaseWithHas {
 
 type HasConfigFields = 'words' | 'ignoreWords';
 
-type HasConfigField = {
-    [key in HasConfigFields]: boolean | undefined;
-};
+type HasConfigField = Record<HasConfigFields, boolean | undefined>;
 export interface ConfigTargetVSCode extends TargetBaseWithHas {
     kind: 'vscode';
     scope: ConfigScopeVScode;
@@ -82,10 +80,10 @@ type ConfigKindToTarget = {
     [key in ConfigTarget['kind']]: key extends ConfigTargetDictionary['kind']
         ? ConfigTargetDictionary
         : key extends ConfigTargetCSpell['kind']
-        ? ConfigTargetCSpell
-        : key extends ConfigTargetVSCode['kind']
-        ? ConfigTargetVSCode
-        : never;
+          ? ConfigTargetCSpell
+          : key extends ConfigTargetVSCode['kind']
+            ? ConfigTargetVSCode
+            : never;
 };
 
 export const ConfigKinds: ConfigKinds = {

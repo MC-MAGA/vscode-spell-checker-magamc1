@@ -18,9 +18,7 @@ export interface LoggerConnection {
     onExit: (handler: () => void) => void;
 }
 
-interface LoggerFunctionMap {
-    [index: number]: LoggerFunction;
-}
+type LoggerFunctionMap = Record<number, LoggerFunction>;
 
 export interface LogEntry {
     seq: number;
@@ -53,6 +51,8 @@ export class Logger {
         [LogLevel.INFO]: stub,
         [LogLevel.DEBUG]: stub,
     };
+    logTime = true;
+    logSequence = true;
 
     constructor(
         private logLevel = LogLevel.DEBUG,
@@ -70,7 +70,9 @@ export class Logger {
             if (entry.level > this.logLevel) {
                 return;
             }
-            const message = `${entry.seq}\t${entry.ts.toISOString()}\t${entry.msg}`;
+            const seq = this.logSequence ? `${entry.seq}\t` : '';
+            const ts = this.logTime ? `${entry.ts.toISOString()}\t` : '';
+            const message = `${seq}${ts}${entry.msg}`;
             const logger = this.loggers[entry.level];
             if (logger) {
                 // console.log(message);
@@ -152,6 +154,10 @@ export class Logger {
 
     getPendingEntries(): LogEntry[] {
         return this.logs;
+    }
+
+    clearPendingEntries() {
+        this.logs = [];
     }
 }
 

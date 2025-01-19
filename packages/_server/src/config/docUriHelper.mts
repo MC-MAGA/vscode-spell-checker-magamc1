@@ -6,7 +6,7 @@ export const schemasWithSpecialHandling = {
     vscodeScm: 'vscode-scm',
 } as const satisfies Readonly<Record<string, string>>;
 
-type SpecialHandlingFunction = (uri: Uri) => Uri;
+type SpecialHandlingFunction = (uri: Uri, root: Uri) => Uri;
 
 const _schemaMapToHandler = {
     [schemasWithSpecialHandling.vscodeNoteBookCell]: forceToFileUri,
@@ -18,28 +18,27 @@ const schemaMapToHandler: Readonly<Record<string, SpecialHandlingFunction>> = _s
 const _alwaysIncludeMatchedFiles = [/^vscode-scm:/];
 
 // handleSpecialUri
-export function handleSpecialUri(uri: Uri): Uri {
+export function handleSpecialUri(uri: Uri, rootUri: Uri): Uri {
     if (!uriNeedsSpecialHandling(uri)) return uri;
-    return getHandler(uri)(uri);
+    return getHandler(uri)(uri, rootUri);
 }
 
-export function forceToFileUri(uri: Uri): Uri {
+export function forceToFileUri(uri: Uri, rootUri: Uri): Uri {
     if (uri.scheme === 'file') return uri;
 
-    return uri.with({
-        scheme: 'file',
-        query: '',
-        fragment: '',
+    return rootUri.with({
+        path: uri.path,
     });
 }
 
 export function extractUriFromQueryParam(uri: Uri | string, param: string): Uri | undefined {
+    uri = typeof uri === 'string' ? Uri.parse(uri) : uri;
     const url = new URL(uri.toString(true));
     const newUrl = decodeURIComponent(url.searchParams.get(param) || '');
     if (!newUrl) return undefined;
     try {
         return Uri.parse(newUrl);
-    } catch (e) {
+    } catch {
         return undefined;
     }
 }
@@ -69,4 +68,17 @@ function handleExtractUriFromQuery(param: string, appendFile?: string): (uri: Ur
 
 function getHandler(uri: Uri): SpecialHandlingFunction {
     return schemaMapToHandler[uri.scheme];
+}
+
+export function isScmUri(uri: Uri | string): boolean {
+    return usesScheme(uri, schemasWithSpecialHandling.vscodeScm);
+}
+
+export function usesScheme(uri: Uri | string, scheme: string): boolean {
+    const schemeColon = scheme.endsWith(':') ? scheme : scheme + ':';
+    scheme = scheme.endsWith(':') ? scheme.slice(0, -1) : scheme;
+    if (typeof uri === 'string') {
+        return uri.startsWith(schemeColon);
+    }
+    return uri.scheme === scheme;
 }

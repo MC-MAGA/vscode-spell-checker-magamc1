@@ -1,4 +1,4 @@
-import { mustBeDefined } from '@internal/common-utils/util.js';
+import { mustBeDefined } from '@internal/common-utils/util';
 import type { CSpellUserSettings } from 'cspell-lib';
 import { searchForConfig } from 'cspell-lib';
 import * as Path from 'path';
@@ -18,9 +18,9 @@ const col = new Intl.Collator();
 describe('Validate configTargetsHelper', () => {
     test('workspaceConfigToTargets in single root workspace', () => {
         const wConfig: WorkspaceConfigForDocument = {
-            uri: URI.file(__filename).toString(),
+            uri: URI.parse(import.meta.url).toString(),
             workspaceFile: undefined,
-            workspaceFolder: URI.file(__dirname).toString(),
+            workspaceFolder: URI.parse(new URL('.', import.meta.url).toString()).toString(),
             words: {
                 user: true,
             },
@@ -47,9 +47,9 @@ describe('Validate configTargetsHelper', () => {
 
     test('workspaceConfigToTargets in multi root workspace', () => {
         const wConfig: WorkspaceConfigForDocument = {
-            uri: URI.file(__filename).toString(),
+            uri: URI.parse(import.meta.url).toString(),
             workspaceFile: 'file://workspace-file.code-workspace',
-            workspaceFolder: URI.file(__dirname).toString(),
+            workspaceFolder: URI.parse(new URL('.', import.meta.url).toString()).toString(),
             words: {
                 user: true,
                 folder: true,
@@ -86,7 +86,7 @@ describe('Validate configTargetsHelper', () => {
 
     test('workspaceConfigToTargets with no workspace', () => {
         const wConfig: WorkspaceConfigForDocument = {
-            uri: URI.file(__filename).toString(),
+            uri: URI.parse(import.meta.url).toString(),
             workspaceFile: undefined,
             workspaceFolder: undefined,
             words: {
@@ -168,9 +168,9 @@ describe('Validate configTargetsHelper', () => {
 
     test('calculateConfigTargets user', async () => {
         const wConfig: WorkspaceConfigForDocument = {
-            uri: URI.file(__filename).toString(),
+            uri: URI.parse(import.meta.url).toString(),
             workspaceFile: undefined,
-            workspaceFolder: URI.file(__dirname).toString(),
+            workspaceFolder: URI.parse(new URL('.', import.meta.url).toString()).toString(),
             words: {
                 user: true,
             },
@@ -178,7 +178,7 @@ describe('Validate configTargetsHelper', () => {
         };
         const cfg = mustBeDefined(await searchForConfig(__dirname));
         const settings = { ...cfg };
-        const r = calculateConfigTargets(settings, wConfig);
+        const r = await calculateConfigTargets(settings, wConfig);
         expect(r).toEqual([
             oc<ConfigTargetDictionary>({
                 kind: 'dictionary',
@@ -219,9 +219,9 @@ describe('Validate configTargetsHelper', () => {
 
     test('calculateConfigTargets workspace', async () => {
         const wConfig: WorkspaceConfigForDocument = {
-            uri: URI.file(__filename).toString(),
+            uri: URI.parse(import.meta.url).toString(),
             workspaceFile: undefined,
-            workspaceFolder: URI.file(__dirname).toString(),
+            workspaceFolder: URI.parse(new URL('.', import.meta.url).toString()).toString(),
             words: {
                 workspace: true,
             },
@@ -231,7 +231,9 @@ describe('Validate configTargetsHelper', () => {
         const defs: DictionaryDef[] = [cd('custom-words', 'path/to/custom-words.txt', false)];
         const dictionaries: string[] = (cfg.dictionaries || []).concat('custom-words');
         const settings: CSpellUserSettings = { ...cfg, dictionaryDefinitions: defs, dictionaries };
-        const r = calculateConfigTargets(settings, wConfig).sort((a, b) => col.compare(a.kind, b.kind) || col.compare(a.name, b.name));
+        const r = (await calculateConfigTargets(settings, wConfig)).sort(
+            (a, b) => col.compare(a.kind, b.kind) || col.compare(a.name, b.name),
+        );
         expect(r).toEqual([
             oc<ConfigTargetCSpell>({
                 kind: 'cspell',

@@ -1,27 +1,26 @@
 <script lang="ts">
-  import type { Checkbox } from '@vscode/webview-ui-toolkit';
-  import type { ChangeEvent } from '../types';
-  import { LogLevel } from 'vscode-webview-rpc/logger';
   import { getClientApi, getLocalState } from '../api';
   import VscodeButton from '../components/VscodeButton.svelte';
   import VscodeCheckbox from '../components/VscodeCheckbox.svelte';
   import VsCodeComponents from './VSCodeComponents.svelte';
   import { appState } from '../state/appState';
+  import CheckboxLogDebug from '../components/CheckboxLogDebug.svelte';
 
-  export let showVsCodeComponents = getLocalState()?.showVsCodeComponents || false;
-  export let name: string;
+  interface Props {
+    showVsCodeComponents?: any;
+    name: string;
+  }
+
+  let { showVsCodeComponents = $bindable(getLocalState()?.showVsCodeComponents || false), name }: Props = $props();
 
   const api = getClientApi();
 
-  const sLogLevel = appState.logLevel();
   const sTodos = appState.todos();
-  $: logLevel = $sLogLevel;
-  $: logDebug = (logLevel && logLevel <= LogLevel.debug) || false;
-  $: todos = $sTodos;
+  let todos = $derived($sTodos);
 
-  let messages: string[] = [];
+  let messages: string[] = $state([]);
 
-  $: reversed = [...messages].reverse();
+  let reversed = $derived([...messages].reverse());
 
   function handleHowdyClick() {
     api.serverNotification.showInformationMessage('Hey There.');
@@ -31,19 +30,6 @@
     const response = await api.serverRequest.whatTimeIsIt();
     messages.push(response);
     messages = messages.slice(-10);
-  }
-
-  function setLogDebug(checked: boolean) {
-    if (checked === undefined) return;
-    if (checked === logDebug) return;
-    const nextLogLevel = checked && (!logLevel || logLevel > LogLevel.debug) ? LogLevel.debug : LogLevel.none;
-    if (nextLogLevel === logLevel) return;
-    sLogLevel.set(nextLogLevel);
-  }
-
-  function changeLogDebug(e: CustomEvent<ChangeEvent<Checkbox>>) {
-    e.preventDefault();
-    setLogDebug(e.detail.currentTarget.checked);
   }
 </script>
 
@@ -67,7 +53,7 @@
   {/if}
 
   <VscodeCheckbox bind:checked={showVsCodeComponents}>Show VSCode Component Samples</VscodeCheckbox>
-  <VscodeCheckbox checked={logDebug} on:change={changeLogDebug}>Log Debug Info</VscodeCheckbox>
+  <CheckboxLogDebug />
 
   {#if showVsCodeComponents}
     <VsCodeComponents />

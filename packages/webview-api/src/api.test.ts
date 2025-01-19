@@ -1,6 +1,6 @@
+import type { MessageConnection } from 'json-rpc-api';
 import { createDisposable } from 'utils-disposables';
 import { describe, expect, test, vi } from 'vitest';
-import type { MessageConnection } from 'vscode-webview-rpc';
 
 import type { ClientSideApiDef } from './api';
 import * as api from './api';
@@ -19,19 +19,22 @@ describe('api', () => {
             clientRequests: {},
             serverNotifications: {
                 showInformationMessage: true,
+                openTextDocument: true,
             },
             serverRequests: {
                 getCurrentDocument: true,
-                getLogLevel: true,
+                getDocSettings: true,
+                getLogDebug: true,
                 getTodos: true,
                 resetTodos: true,
-                setLogLevel: true,
+                setLogDebug: true,
                 setTodos: true,
+                updateEnabledFileTypes: true,
                 watchFields: true,
                 whatTimeIsIt: true,
             },
         };
-        const client = api.createClientSideSpellInfoWebviewApi(connection, clientInterface);
+        const client = api.createClientSideSpellInfoWebviewApi(connection, clientInterface, undefined);
         expect(client).toBeDefined();
         expect(client.serverRequest.getTodos).toBeTypeOf('function');
         const fn: (...p: any) => any = client.serverRequest.setTodos;

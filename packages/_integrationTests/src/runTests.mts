@@ -5,25 +5,32 @@ import { fileURLToPath } from 'node:url';
 import { downloadAndUnzipVSCode, runTests } from '@vscode/test-electron';
 import decompress from 'decompress';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const __dirname = fileURLToPath(new URL('./', import.meta.url));
 const root = path.resolve(__dirname, '../../../');
+const fixtureFolder = path.resolve(__dirname, '../testFixtures');
 
 const cacheDirName = '.vscode-test';
 
 async function run(version: undefined | 'stable' | 'insiders' | string, extensionDevelopmentPath: string) {
     // Delete `.vscode-test` to prevent socket issues
-    await fs.rm(cacheDirName, { recursive: true, force: true });
+    // await fs.rm(cacheDirName, { recursive: true, force: true });
+    // await fs.rm(path.resolve(root, cacheDirName), { recursive: true, force: true });
+
+    // try and have a short path to prevent socket errors.
+    const cachePath = path.join(root, cacheDirName);
 
     // The path to the extension test runner script
     // Passed to --extensionTestsPath
     const extensionTestsPath = path.resolve(__dirname, './index.cjs');
 
-    const fileToOpen = path.relative(process.cwd(), __filename);
-    const launchArgs: string[] = ['--disable-extensions', fileToOpen];
+    const fileToOpen = path.relative(process.cwd(), fixtureFolder);
+    const launchArgs: string[] = [
+        '--disable-extensions',
+        fileToOpen,
+        `--extensions-dir=${path.join(cachePath, `${version}`, 'extensions')}`,
+        `--user-data-dir=${path.join(cachePath, `${version}`, 'user-data')}`,
+    ];
 
-    // try and have a short path to prevent socket errors.
-    const cachePath = path.join(root, cacheDirName);
     const vscodeExecutablePath = await downloadAndUnzipVSCode({ cachePath, version });
     const options = { vscodeExecutablePath, extensionDevelopmentPath, extensionTestsPath, launchArgs };
     await runTests(options);
@@ -80,8 +87,7 @@ async function main() {
     } catch (err) {
         console.error(err);
         console.error('Failed to run tests');
-        // eslint-disable-next-line no-process-exit
-        process.exit(1);
+        process.exitCode = 1;
     }
 }
 

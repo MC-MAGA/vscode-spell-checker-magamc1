@@ -1,24 +1,24 @@
 import type { Pattern } from 'cspell-lib';
 import * as cspell from 'cspell-lib';
 import { getDefaultSettings } from 'cspell-lib';
-import * as os from 'os';
 import * as Path from 'path';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import type { ConfigurationItem, Connection, WorkspaceFolder } from 'vscode-languageserver/node.js';
 import { URI as Uri } from 'vscode-uri';
 
+import { createMockServerSideApi } from '../test/test.api.js';
 import { extendExpect } from '../test/test.matchers.js';
-import type { Connection, WorkspaceFolder } from '../vscodeLanguageServer/index.cjs';
-import type { CSpellUserSettings } from './cspellConfig/index.mjs';
+import type { CSpellUserAndExtensionSettings } from './cspellConfig/index.mjs';
 import type { ExcludedByMatch } from './documentSettings.mjs';
 import {
     __testing__,
     correctBadSettings,
     debugExports,
     DocumentSettings,
-    isLanguageEnabled,
-    isUriAllowed,
-    isUriBlocked,
+    isUriAllowedBySettings,
+    isUriBlockedBySettings,
 } from './documentSettings.mjs';
+import { isFileTypeEnabled } from './extractEnabledFileTypes.mjs';
 import { getConfiguration, getWorkspaceFolders } from './vscode.config.mjs';
 
 const { toEqualCaseInsensitive: expectToEqualCaseInsensitive } = extendExpect(expect);
@@ -45,7 +45,7 @@ const workspaceFolderClient: WorkspaceFolder = {
     name: 'client',
 };
 
-const cspellConfigInVsCode: CSpellUserSettings = {
+const cspellConfigInVsCode: CSpellUserAndExtensionSettings = {
     name: 'Mock VS Code Config',
     ignorePaths: ['${workspaceFolder:_server}/**/*.json'],
     import: [
@@ -53,12 +53,14 @@ const cspellConfigInVsCode: CSpellUserSettings = {
         '${workspaceFolder:_server}/sampleSourceFiles/cSpell.json',
     ],
     enabledLanguageIds: ['typescript', 'javascript', 'php', 'json', 'jsonc'],
+    mergeCSpellSettings: true,
+    useLocallyInstalledCSpellDictionaries: true,
 };
 
 const sampleFiles = {
     sampleClientEsLint: Path.resolve(pathWorkspaceRoot, 'packages/client/.eslintrc.js'),
     sampleClientReadme: Path.resolve(pathWorkspaceRoot, 'packages/client/README.md'),
-    sampleNodePackage: require.resolve('yargs'),
+    sampleNodePackage: require.resolve('eslint'),
     sampleSamplesReadme: Path.resolve(pathWorkspaceRoot, 'samples/custom-dictionary/README.md'),
     sampleServerCSpell: Path.resolve(pathWorkspaceRoot, 'packages/_server/cspell.json'),
     sampleServerPackageLock: Path.resolve(pathWorkspaceRoot, 'packages/_server/package-lock.json'),
@@ -74,7 +76,7 @@ const configFiles = {
     serverConfigVSCode: Path.resolve(pathWorkspaceServer, '.vscode/cspell.json'),
 };
 
-const ac = expect.arrayContaining;
+// const ac: typeof expect.arrayContaining = (...p) => expect.arrayContaining(...p);
 
 describe('Validate DocumentSettings', () => {
     beforeEach(() => {
@@ -82,24 +84,24 @@ describe('Validate DocumentSettings', () => {
         mockGetWorkspaceFolders.mockClear();
     });
 
-    test('version', () => {
+    test('version', async () => {
         const docSettings = newDocumentSettings();
         expect(docSettings.version).toEqual(0);
-        docSettings.resetSettings();
+        await docSettings.resetSettings();
         expect(docSettings.version).toEqual(1);
     });
 
     test('checks isUriAllowed', () => {
-        expect(isUriAllowed(Uri.file(__filename).toString())).toBe(true);
+        expect(isUriAllowedBySettings(Uri.parse(import.meta.url).toString(), {})).toBe(true);
     });
 
     test('checks isUriBlocked', () => {
-        const uriFile = Uri.file(__filename);
-        expect(isUriBlocked(uriFile.toString())).toBe(false);
+        const uriFile = Uri.parse(import.meta.url);
+        expect(isUriBlockedBySettings(uriFile.toString(), {})).toBe(false);
 
         const uriGit = uriFile.with({ scheme: 'debug' });
 
-        expect(isUriBlocked(uriGit.toString())).toBe(true);
+        expect(isUriBlockedBySettings(uriGit.toString(), {})).toBe(true);
     });
 
     test('folders', async () => {
@@ -111,14 +113,14 @@ describe('Validate DocumentSettings', () => {
         expect(folders).toBe(mockFolders);
     });
 
-    test('tests register config path', () => {
+    test('tests register config path', async () => {
         const mockFolders: WorkspaceFolder[] = [workspaceFolderServer];
         mockGetWorkspaceFolders.mockReturnValue(Promise.resolve(mockFolders));
 
         const docSettings = newDocumentSettings();
         const configFile = Path.join(pathSampleSourceFiles, 'cSpell.json');
         expect(docSettings.version).toEqual(0);
-        docSettings.registerConfigurationFile(configFile);
+        await docSettings.registerConfigurationFile(configFile);
         expect(docSettings.version).toEqual(1);
         expect(docSettings.configsToImport).toContain(configFile);
     });
@@ -129,9 +131,9 @@ describe('Validate DocumentSettings', () => {
         mockGetConfiguration.mockReturnValue(Promise.resolve([cspellConfigInVsCode, {}]));
         const docSettings = newDocumentSettings();
         const configFile = Path.join(pathSampleSourceFiles, 'cspell-ext.json');
-        docSettings.registerConfigurationFile(configFile);
+        await docSettings.registerConfigurationFile(configFile);
 
-        const settings = await docSettings.getSettings({ uri: Uri.file(__filename).toString() });
+        const settings = await docSettings.getSettings({ uri: Uri.parse(import.meta.url).toString() });
         expect(settings.enabled).toBeUndefined();
         expect(settings.language).toBe('en-gb');
     });
@@ -144,9 +146,9 @@ describe('Validate DocumentSettings', () => {
         );
         const docSettings = newDocumentSettings();
         const configFile = Path.join(pathSampleSourceFiles, 'cspell-ext.json');
-        docSettings.registerConfigurationFile(configFile);
+        await docSettings.registerConfigurationFile(configFile);
 
-        const settings = await docSettings.getSettings({ uri: Uri.file(__filename).toString() });
+        const settings = await docSettings.getSettings({ uri: Uri.parse(import.meta.url).toString() });
         expect(settings.workspaceRootPath?.toLowerCase()).toBe(pathWorkspaceClient.toLowerCase());
     });
 
@@ -156,9 +158,9 @@ describe('Validate DocumentSettings', () => {
         mockGetConfiguration.mockReturnValue(Promise.resolve([{}, {}]));
         const docSettings = newDocumentSettings();
         const configFile = Path.join(pathSampleSourceFiles, 'cSpell.json');
-        docSettings.registerConfigurationFile(configFile);
+        await docSettings.registerConfigurationFile(configFile);
 
-        const result = await docSettings.isExcluded(Uri.file(__filename).toString());
+        const result = await docSettings.isExcluded(Uri.parse(import.meta.url).toString());
         expect(result).toBe(false);
     });
 
@@ -170,24 +172,37 @@ describe('Validate DocumentSettings', () => {
         );
         const docSettings = newDocumentSettings();
         const configFile = Path.join(pathSampleSourceFiles, 'cSpell.json');
-        docSettings.registerConfigurationFile(configFile);
+        await docSettings.registerConfigurationFile(configFile);
 
-        const settings = await docSettings.getSettings({ uri: Uri.file(__filename).toString() });
-        expect(settings.enabledLanguageIds).not.toContain('typescript');
-        expect(settings.enabledLanguageIds).toEqual(expect.arrayContaining(['php', 'json', 'pug']));
+        const settings = await docSettings.getSettings({ uri: Uri.parse(import.meta.url).toString() });
+        expect(settings.enabledLanguageIds).toBeUndefined();
+        expect(settings.enabledFileTypes).toEqual({
+            javascript: false,
+            json: true,
+            jsonc: true,
+            php: true,
+            pug: true,
+            typescript: false,
+        });
     });
 
     test('applyEnableFiletypes', () => {
-        const settings: CSpellUserSettings = {
+        const settings: CSpellUserAndExtensionSettings = {
             enabledLanguageIds: ['typescript', 'markdown', 'plaintext', 'json'],
             enableFiletypes: ['!json', '!!!javascript'],
+            enabledFileTypes: { typescript: true, plaintext: false, FreeFormFortran: true, json: true },
         };
-        const enabled = __testing__.extractEnableFiletypes(settings, {
-            enableFiletypes: ['typescript', '!plaintext', 'FreeFormFortran', '!!json', '!!javascript'],
+        Object.freeze(settings);
+        const r = __testing__.applyEnabledFileTypes(settings);
+        expect(r.enabledLanguageIds).toBeUndefined();
+        expect(r.enabledFileTypes).toEqual({
+            FreeFormFortran: true,
+            javascript: false,
+            json: true,
+            markdown: true,
+            plaintext: false,
+            typescript: true,
         });
-        const r = __testing__.applyEnableFiletypes(enabled, settings);
-        // cspell:ignore freeformfortran
-        expect(r.enabledLanguageIds).toEqual(ac(['typescript', 'markdown', 'FreeFormFortran', 'json']));
     });
 
     test.each`
@@ -205,7 +220,7 @@ describe('Validate DocumentSettings', () => {
         ${'typescript'} | ${{ enableFiletypes: ['!*'], checkOnlyEnabledFileTypes: false }}              | ${true}
         ${'java'}       | ${{ enableFiletypes: ['!*', 'java'], checkOnlyEnabledFileTypes: true }}       | ${true}
     `('isLanguageEnabled $languageId $settings', ({ languageId, settings, expected }) => {
-        expect(isLanguageEnabled(languageId, settings)).toBe(expected);
+        expect(isFileTypeEnabled(languageId, settings)).toBe(expected);
     });
 
     test('isExcludedBy', async () => {
@@ -214,9 +229,9 @@ describe('Validate DocumentSettings', () => {
         mockGetConfiguration.mockReturnValue(Promise.resolve([{}, {}]));
         const docSettings = newDocumentSettings();
         const configFile = Path.join(pathSampleSourceFiles, 'cSpell.json');
-        docSettings.registerConfigurationFile(configFile);
+        await docSettings.registerConfigurationFile(configFile);
 
-        const result = await docSettings.calcExcludedBy(Uri.file(__filename).toString());
+        const result = await docSettings.calcExcludedBy(Uri.parse(import.meta.url).toString());
         expect(result).toHaveLength(0);
     });
 
@@ -225,7 +240,7 @@ describe('Validate DocumentSettings', () => {
         mockGetWorkspaceFolders.mockReturnValue(Promise.resolve(mockFolders));
         mockGetConfiguration.mockReturnValue(Promise.resolve([cspellConfigInVsCode, {}]));
         const docSettings = newDocumentSettings();
-        const settings = await docSettings.getSettings({ uri: Uri.file(__filename).toString() });
+        const settings = await docSettings.getSettings({ uri: Uri.parse(import.meta.url).toString() });
         const d = docSettings.extractTargetDictionaries(settings);
         expect(d).toEqual([
             expect.objectContaining({
@@ -240,7 +255,7 @@ describe('Validate DocumentSettings', () => {
         mockGetWorkspaceFolders.mockReturnValue(Promise.resolve(mockFolders));
         mockGetConfiguration.mockReturnValue(Promise.resolve([cspellConfigInVsCode, {}]));
         const docSettings = newDocumentSettings();
-        const settings = await docSettings.getSettings({ uri: Uri.file(__filename).toString() });
+        const settings = await docSettings.getSettings({ uri: Uri.parse(import.meta.url).toString() });
         const files = docSettings.extractCSpellConfigurationFiles(settings);
         expect(files.map((f) => f.toString())).toEqual(
             expect.arrayContaining([Uri.file(Path.join(pathWorkspaceServer, 'cspell.json')).toString()]),
@@ -252,7 +267,7 @@ describe('Validate DocumentSettings', () => {
         mockGetWorkspaceFolders.mockReturnValue(Promise.resolve(mockFolders));
         mockGetConfiguration.mockReturnValue(Promise.resolve([cspellConfigInVsCode, {}]));
         const docSettings = newDocumentSettings();
-        const settings = await docSettings.getSettings({ uri: Uri.file(__filename).toString() });
+        const settings = await docSettings.getSettings({ uri: Uri.parse(import.meta.url).toString() });
         const configs = docSettings.extractCSpellFileConfigurations(settings);
         expect(configs.map((c) => c.name)).toEqual([
             shortPathName(Path.join(pathWorkspaceServer, 'cspell.json')),
@@ -302,10 +317,10 @@ describe('Validate DocumentSettings', () => {
     `('isExcludedBy $filename', async ({ filename, expected }: IsExcludeByTest) => {
         const mockFolders: WorkspaceFolder[] = [workspaceFolderRoot, workspaceFolderClient, workspaceFolderServer];
         mockGetWorkspaceFolders.mockReturnValue(Promise.resolve(mockFolders));
-        mockGetConfiguration.mockReturnValue(Promise.resolve([{}, {}]));
+        mockGetConfiguration.mockReturnValue(Promise.resolve([{ mergeCSpellSettings: true }, {}]));
         const docSettings = newDocumentSettings();
         const configFile = Path.join(pathSampleSourceFiles, 'cspell-exclude-tests.json');
-        docSettings.registerConfigurationFile(configFile);
+        await docSettings.registerConfigurationFile(configFile);
 
         const uri = Uri.file(Path.resolve(pathWorkspaceRoot, filename)).toString();
         const result = await docSettings.calcExcludedBy(uri);
@@ -328,7 +343,7 @@ describe('Validate DocumentSettings', () => {
         mockGetWorkspaceFolders.mockReturnValue(Promise.resolve(mockFolders));
         mockGetConfiguration.mockReturnValue(Promise.resolve([{}, {}]));
         const docSettings = newDocumentSettings();
-        docSettings.registerConfigurationFile(Path.join(pathWorkspaceRoot, 'cSpell.json'));
+        await docSettings.registerConfigurationFile(Path.join(pathWorkspaceRoot, 'cSpell.json'));
 
         const uri = Uri.file(Path.resolve(pathWorkspaceRoot, filename));
         const result = await docSettings.isGitIgnored(uri);
@@ -400,65 +415,81 @@ describe('Validate DocumentSettings', () => {
         const mockFolders: WorkspaceFolder[] = [workspaceFolderRoot, workspaceFolderClient, workspaceFolderServer];
         mockGetWorkspaceFolders.mockReturnValue(Promise.resolve(mockFolders));
         mockGetConfiguration.mockReturnValue(Promise.resolve([{}, {}]));
-        const docSettings = newDocumentSettings(getDefaultSettings());
+        const docSettings = newDocumentSettings(await getDefaultSettings());
         const uri = Uri.file(Path.resolve(pathWorkspaceRoot, filename)).toString();
         const result = await docSettings.findCSpellConfigurationFilesForUri(uri);
         // Note: toLowerCase is needed because on MacOS and Windows cSpell.json and cspell.json will be considered the same file.
         expect(result.map((f) => f.toString().toLowerCase())).toEqual(expected.map((u) => filePathToUri(u).toString().toLowerCase()));
     });
 
+    function rPathWsRoot(...paths: string[]) {
+        return Path.resolve(pathWorkspaceRoot, ...paths);
+    }
+
     test.each`
         filename                               | expected
         ${sampleFiles.sampleClientEsLint}      | ${[configFiles.clientConfig, configFiles.rootConfigYaml]}
         ${sampleFiles.sampleNodePackage}       | ${[configFiles.rootConfigJson, configFiles.rootConfigYaml]}
-        ${sampleFiles.sampleSamplesReadme}     | ${[Path.resolve(pathWorkspaceRoot, 'samples/custom-dictionary/cspell.json')]}
+        ${sampleFiles.sampleSamplesReadme}     | ${[rPathWsRoot('samples/custom-dictionary/cspell.json')]}
         ${sampleFiles.sampleClientReadme}      | ${[configFiles.clientConfig, configFiles.rootConfigYaml]}
         ${sampleFiles.sampleServerPackageLock} | ${[configFiles.serverConfig, configFiles.rootConfigYaml]}
     `('findCSpellConfigurationFilesForUri no folders $filename', async ({ filename, expected }: FindCSpellConfigurationFilesForUriTest) => {
         const mockFolders: WorkspaceFolder[] = [];
         mockGetWorkspaceFolders.mockReturnValue(Promise.resolve(mockFolders));
         mockGetConfiguration.mockReturnValue(Promise.resolve([{}, {}]));
-        const docSettings = newDocumentSettings(getDefaultSettings());
+        const docSettings = newDocumentSettings(await getDefaultSettings());
         const uri = Uri.file(Path.resolve(pathWorkspaceRoot, filename)).toString();
         const result = await docSettings.findCSpellConfigurationFilesForUri(uri);
         // Note: toLowerCase is needed because on MacOS and Windows cSpell.json and cspell.json will be considered the same file.
         expect(result.map((f) => f.toString().toLowerCase())).toEqual(expected.map((u) => filePathToUri(u).toString().toLowerCase()));
     });
 
-    test('resolvePath', () => {
-        expect(debugExports.resolvePath(__dirname)).toBe(__dirname);
-        expect(debugExports.resolvePath('~')).toBe(os.homedir());
-    });
+    function newDocumentSettings(defaultSettings: CSpellUserAndExtensionSettings = {}) {
+        const connection = createMockConnection();
+        const mockWorkspaceGetConfiguration = vi.mocked(connection.workspace.getConfiguration);
+        mockWorkspaceGetConfiguration.mockImplementation(implGetConfiguration);
+        return new DocumentSettings(connection, createMockServerSideApi(), defaultSettings);
+    }
 
-    function newDocumentSettings(defaultSettings: CSpellUserSettings = {}) {
-        return new DocumentSettings({} as Connection, defaultSettings);
+    function implGetConfiguration(): Promise<any>;
+    function implGetConfiguration(section: string): Promise<any>;
+    function implGetConfiguration(section: ConfigurationItem): Promise<any>;
+    function implGetConfiguration(section: ConfigurationItem[]): Promise<any[]>;
+    function implGetConfiguration(section?: string | ConfigurationItem | ConfigurationItem[]): Promise<any> {
+        const sec =
+            typeof section == 'string' ? section : !section ? undefined : Array.isArray(section) ? section[0].section : section.section;
+        if (sec === 'cSpell.trustedWorkspace') {
+            return Promise.resolve(true);
+        }
+
+        return Promise.resolve(undefined);
     }
 });
 
 describe('Validate RegExp corrections', () => {
-    test('fixRegEx', () => {
-        const defaultSettings = cspell.getDefaultSettings();
+    test('fixRegEx', async () => {
+        const defaultSettings = await cspell.getDefaultSettings();
+        const patterns = defaultSettings.patterns;
+
         // Make sure it doesn't change the defaults.
-        expect(defaultSettings.patterns?.map((p) => p.pattern).map(debugExports.fixRegEx)).toEqual(
-            defaultSettings.patterns?.map((p) => p.pattern),
-        );
+        expect(patterns?.map((p) => p.pattern).map(debugExports.fixRegEx)).toEqual(patterns?.map((p) => p.pattern));
         const sampleRegEx: Pattern[] = ['/#.*/', '/"""(.*?\\n?)+?"""/g', "/'''(.*?\\n?)+?'''/g", 'strings'];
         const expectedRegEx: Pattern[] = ['/#.*/', '/(""")[^\\1]*?\\1/g', "/(''')[^\\1]*?\\1/g", 'strings'];
         expect(sampleRegEx.map(debugExports.fixRegEx)).toEqual(expectedRegEx);
     });
 
-    test('fixPattern', () => {
-        const defaultSettings = cspell.getDefaultSettings();
+    test('fixPattern', async () => {
+        const defaultSettings = await cspell.getDefaultSettings();
         // Make sure it doesn't change the defaults.
         expect(defaultSettings.patterns?.map(debugExports.fixPattern)).toEqual(defaultSettings.patterns);
     });
 
-    test('fixPattern', () => {
-        const defaultSettings = cspell.getDefaultSettings();
+    test('fixPattern', async () => {
+        const defaultSettings = await cspell.getDefaultSettings();
         // Make sure it doesn't change the defaults.
         expect(correctBadSettings(defaultSettings)).toEqual(defaultSettings);
 
-        const settings: CSpellUserSettings = {
+        const settings: CSpellUserAndExtensionSettings = {
             patterns: [
                 {
                     name: 'strings',
@@ -466,7 +497,7 @@ describe('Validate RegExp corrections', () => {
                 },
             ],
         };
-        const expectedSettings: CSpellUserSettings = {
+        const expectedSettings: CSpellUserAndExtensionSettings = {
             patterns: [
                 {
                     name: 'strings',
@@ -487,4 +518,36 @@ function shortPathName(file: string | Uri): string {
     const uri = filePathToUri(file);
     const parts = uri.toString().split('/');
     return parts.slice(-2).join('/');
+}
+
+function createMockConnection(): Connection {
+    const jest = vi;
+
+    return {
+        listen: jest.fn(),
+        onInitialize: jest.fn(),
+        onInitialized: jest.fn(),
+        onDidChangeConfiguration: jest.fn(),
+        onDidChangeWatchedFiles: jest.fn(),
+        onShutdown: jest.fn(),
+        sendNotification: jest.fn() as unknown as Connection['sendNotification'],
+        sendRequest: jest.fn() as unknown as Connection['sendRequest'],
+        onRequest: jest.fn() as unknown as Connection['onRequest'],
+        onNotification: jest.fn() as unknown as Connection['onNotification'],
+        dispose: jest.fn(),
+        window: {
+            connection: {} as Connection,
+            initialize: jest.fn(),
+            fillServerCapabilities: jest.fn(),
+            showErrorMessage: jest.fn(),
+            showInformationMessage: jest.fn(),
+            showWarningMessage: jest.fn(),
+            attachWorkDoneProgress: jest.fn(),
+            createWorkDoneProgress: jest.fn(),
+            showDocument: jest.fn(),
+        },
+        workspace: {
+            getConfiguration: jest.fn(),
+        } as unknown as Connection['workspace'],
+    } as unknown as Connection;
 }

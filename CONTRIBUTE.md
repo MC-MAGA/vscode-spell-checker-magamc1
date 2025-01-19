@@ -1,8 +1,8 @@
 # vscode-spell-checker
 
-[![](https://vsmarketplacebadge.apphb.com/installs-short/streetsidesoftware.code-spell-checker.svg)](https://marketplace.visualstudio.com/items?itemName=streetsidesoftware.code-spell-checker)
-[![](https://vsmarketplacebadge.apphb.com/rating-short/streetsidesoftware.code-spell-checker.svg)](https://marketplace.visualstudio.com/items?itemName=streetsidesoftware.code-spell-checker)
-[![](https://vsmarketplacebadge.apphb.com/version-short/streetsidesoftware.code-spell-checker.svg)](https://marketplace.visualstudio.com/items?itemName=streetsidesoftware.code-spell-checker)
+[![](https://vsmarketplacebadges.dev/installs-short/streetsidesoftware.code-spell-checker.svg)](https://marketplace.visualstudio.com/items?itemName=streetsidesoftware.code-spell-checker)
+[![](https://vsmarketplacebadges.dev/rating-short/streetsidesoftware.code-spell-checker.svg)](https://marketplace.visualstudio.com/items?itemName=streetsidesoftware.code-spell-checker)
+[![](https://vsmarketplacebadges.dev/version-short/streetsidesoftware.code-spell-checker.svg)](https://marketplace.visualstudio.com/items?itemName=streetsidesoftware.code-spell-checker)
 
 [![Build & Test Actions Status](https://github.com/streetsidesoftware/vscode-spell-checker/workflows/build-test/badge.svg)](https://github.com/streetsidesoftware/vscode-spell-checker/actions)
 [![Integration Tests Actions Status](https://github.com/streetsidesoftware/vscode-spell-checker/workflows/Integration%20Tests/badge.svg)](https://github.com/streetsidesoftware/vscode-spell-checker/actions)
@@ -16,27 +16,27 @@ For the readme on the plugin: [README](./packages/client/README.md).
 
 ## Building the extension
 
-1. `npm install -g yarn`
-2. `yarn install`
-3. `yarn build`
-4. Launch vscode: `code Spell Checker.code-workspace`
-5. Run the extension from vscode:
+1. `npm install`
+1. `npm run build`
+1. Launch vscode: `code "Spell Checker.code-workspace"`
+1. Run the extension from vscode:
     1. `Debug Tab`
     1. Choose `Client: Launch Extension (Spell Checker Root)` configuration.
     1. `F5`
 
-<sup>\*</sup> Requires Node >= 14
+<sup>\*</sup> Requires Node >= 20
 
 ### Debugging the Client
 
-1. Launch vscode: `code packages/client`
-1. Run the extension from vscode: `F5`
+1. Run the extension from vscode:
+    1. `Debug Tab`
+    1. Choose `Client: Launch Extension (Spell Checker Root)` configuration.
+    1. `F5`
 
 ### Debugging the Server
 
-1. Launch vscode for the server: `code packages/_server`
 1. Launch the client as specified above.
-1. Attach to the server: `F5` or `Debug -> Attach Server`
+1. Attach to the server: `Server: Attach Server (Server - Spell Checker)`
 
 Sometimes the ports get stuck. You can see if they are being used with:
 
@@ -54,10 +54,10 @@ If anything shows up, then the port is still locked.
 
 ## Packages
 
--   `client` - the actual extension running in VS Code.
--   `_server` - the extension server that processes spell checker requests
--   `_settingsViewer` - a webapp that provides a visual interface to the configuration files.
--   `_integrationTests` - a test suite that launches the extension in VS Code.
+- `client` - the actual extension running in VS Code.
+- `_server` - the extension server that processes spell checker requests
+- `_settingsViewer` - a webapp that provides a visual interface to the configuration files.
+- `_integrationTests` - a test suite that launches the extension in VS Code.
 
 ## Adding configurations
 
@@ -120,7 +120,7 @@ ZipArchive::deleteName
 ZipArchive::extractTo
 ```
 
-The word list complier will convert camelCase and snake_case words into a simple word list.
+The word list compiler will convert camelCase and snake_case words into a simple word list.
 This is both for speed and predictability.
 
 ```php
@@ -160,11 +160,11 @@ angeles
 Spaces in the compiled dictionary have a special meaning.
 They tell the suggestion algorithm to suggest: 'newYork', 'new_york', 'new york', etc. for 'newyork'.
 
-### Locals
+### Locales
 
 The default language is English: `"cSpell.language": "en"`
 
-CSpell currently has English locals: `en-US` and `en-GB`.
+CSpell currently has English locales: `en-US` and `en-GB`.
 
 Example words differences: behaviour (en-GB) vs behavior (en-US)
 

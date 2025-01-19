@@ -1,28 +1,26 @@
-import { log, logDebug } from '@internal/common-utils/log.js';
-import { capitalize } from '@internal/common-utils/util.js';
+import { log, logDebug, logError } from '@internal/common-utils/log';
+import { capitalize } from '@internal/common-utils/util';
 import type { SpellingDictionary } from 'cspell-lib';
 import { constructSettingsForText, getDictionary, IssueType, Text } from 'cspell-lib';
 import { format } from 'util';
+import type { CodeActionParams, Range as LangServerRange, TextDocuments } from 'vscode-languageserver/node.js';
+import { Command as LangServerCommand } from 'vscode-languageserver/node.js';
 import type { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Diagnostic } from 'vscode-languageserver-types';
 import { CodeAction, CodeActionKind, TextEdit } from 'vscode-languageserver-types';
 
-import type { ClientApi } from './clientApi.mjs';
+import type { SpellCheckerDiagnosticData, Suggestion, UriString, WorkspaceConfigForDocument } from './api.js';
 import { clientCommands as cc } from './commands.mjs';
 import type { ConfigScope, ConfigTarget, ConfigTargetCSpell, ConfigTargetDictionary, ConfigTargetVSCode } from './config/configTargets.mjs';
 import { ConfigKinds, ConfigScopes } from './config/configTargets.mjs';
 import { calculateConfigTargets } from './config/configTargetsHelper.mjs';
-import type { CSpellUserSettings } from './config/cspellConfig/index.mjs';
-import { isUriAllowed } from './config/documentSettings.mjs';
-import type { DiagnosticData } from './models/DiagnosticData.mjs';
-import type { Suggestion } from './models/Suggestion.mjs';
+import type { CSpellUserAndExtensionSettings } from './config/cspellConfig/index.mjs';
+import { isUriAllowedBySettings } from './config/documentSettings.mjs';
 import type { GetSettingsResult } from './SuggestionsGenerator.mjs';
 import { SuggestionGenerator } from './SuggestionsGenerator.mjs';
 import { uniqueFilter } from './utils/index.mjs';
 import * as range from './utils/range.mjs';
 import * as Validator from './validator.mjs';
-import type { CodeActionParams, Range as LangServerRange, TextDocuments } from './vscodeLanguageServer/index.cjs';
-import { Command as LangServerCommand } from './vscodeLanguageServer/index.cjs';
 
 const createCommand = LangServerCommand.create;
 
@@ -32,19 +30,23 @@ function extractText(textDocument: TextDocument, range: LangServerRange) {
 
 const debugTargets = false;
 
-function extractDiagnosticData(diag: Diagnostic): DiagnosticData {
+function extractDiagnosticData(diag: Diagnostic): SpellCheckerDiagnosticData {
     const { data } = diag;
     if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
-    return data as DiagnosticData;
+    return data as SpellCheckerDiagnosticData;
 }
 
-export function onCodeActionHandler(
+export interface CodeActionHandlerDependencies {
+    fetchSettings: (doc: TextDocument) => Promise<CSpellUserAndExtensionSettings>;
+    getSettingsVersion: (doc: TextDocument) => number;
+    fetchWorkspaceConfigForDocument: (uri: UriString) => Promise<WorkspaceConfigForDocument>;
+}
+
+export function createOnCodeActionHandler(
     documents: TextDocuments<TextDocument>,
-    fnSettings: (doc: TextDocument) => Promise<CSpellUserSettings>,
-    fnSettingsVersion: (doc: TextDocument) => number,
-    clientApi: ClientApi,
+    dependencies: CodeActionHandlerDependencies,
 ): (params: CodeActionParams) => Promise<CodeAction[]> {
-    const codeActionHandler = new CodeActionHandler(documents, fnSettings, fnSettingsVersion, clientApi);
+    const codeActionHandler = new CodeActionHandler(documents, dependencies);
 
     return (params) => codeActionHandler.handler(params);
 }
@@ -62,9 +64,7 @@ class CodeActionHandler {
 
     constructor(
         readonly documents: TextDocuments<TextDocument>,
-        readonly fnSettings: (doc: TextDocument) => Promise<CSpellUserSettings>,
-        readonly fnSettingsVersion: (doc: TextDocument) => number,
-        readonly clientApi: ClientApi,
+        readonly dependencies: CodeActionHandlerDependencies,
     ) {
         this.settingsCache = new Map<string, CacheEntry>();
         this.sugGen = new SuggestionGenerator((doc) => this.getSettings(doc));
@@ -72,7 +72,7 @@ class CodeActionHandler {
 
     async getSettings(doc: TextDocument): Promise<GetSettingsResult> {
         const cached = this.settingsCache.get(doc.uri);
-        const settingsVersion = this.fnSettingsVersion(doc);
+        const settingsVersion = this.dependencies.getSettingsVersion(doc);
         if (cached?.docVersion === doc.version && cached.settingsVersion === settingsVersion) {
             return cached.settings;
         }
@@ -82,7 +82,7 @@ class CodeActionHandler {
     }
 
     private async constructSettings(doc: TextDocument): Promise<SettingsDictPair> {
-        const settings = constructSettingsForText(await this.fnSettings(doc), doc.getText(), doc.languageId);
+        const settings = constructSettingsForText(await this.dependencies.fetchSettings(doc), doc.getText(), doc.languageId);
         const dictionary = await getDictionary(settings);
         return { settings, dictionary };
     }
@@ -115,9 +115,16 @@ class CodeActionHandler {
             textDocument,
         };
 
-        return eslintSpellCheckerDiags.length
-            ? this.handlerESLint({ ...ctx, diags: eslintSpellCheckerDiags })
-            : this.handlerCSpell({ ...ctx, diags: spellCheckerDiags });
+        try {
+            const actions = eslintSpellCheckerDiags.length
+                ? await this.handlerESLint({ ...ctx, diags: eslintSpellCheckerDiags })
+                : await this.handlerCSpell({ ...ctx, diags: spellCheckerDiags });
+            // log(format('CodeAction Result: %o', actions), uri);
+            return actions;
+        } catch (e) {
+            logError(format('CodeAction Error', e), uri);
+            return [];
+        }
     }
 
     private async handlerCSpell(handlerContext: CodeActionHandlerContext) {
@@ -130,11 +137,11 @@ class CodeActionHandler {
         if (spellCheckerDiags.length > 1) return [];
 
         const { settings: docSetting, dictionary } = await this.getSettings(textDocument);
-        if (!isUriAllowed(uri, docSetting.allowedSchemas)) {
+        if (!isUriAllowedBySettings(uri, docSetting)) {
             log(`CodeAction Uri Not allowed: ${uri}`);
             return [];
         }
-        const pWorkspaceConfig = this.clientApi.sendOnWorkspaceConfigForDocumentRequest({ uri });
+        const pWorkspaceConfig = this.dependencies.fetchWorkspaceConfigForDocument(uri);
 
         function replaceText(range: LangServerRange, text?: string) {
             return TextEdit.replace(range, text || '');
@@ -145,7 +152,6 @@ class CodeActionHandler {
         };
 
         async function genCodeActionsForSuggestions(_dictionary: SpellingDictionary) {
-            log('CodeAction generate suggestions');
             let isSpellingIssue: boolean | undefined;
             let diagWord: string | undefined;
             for (const diag of spellCheckerDiags) {
@@ -170,8 +176,8 @@ class CodeActionHandler {
             // Only suggest adding if it is our diagnostic and there is a word.
             if (isSpellingIssue && word && spellCheckerDiags.length) {
                 const wConfig = await pWorkspaceConfig;
-                const targets = calculateConfigTargets(docSetting, wConfig);
-                debugTargets && logTargets(targets);
+                const targets = await calculateConfigTargets(docSetting, wConfig);
+                if (debugTargets) logTargets(targets);
 
                 if (!docSetting.hideAddToDictionaryCodeActions) {
                     actions.push(...generateTargetActions(textDocument, spellCheckerDiags, word, targets));
@@ -180,7 +186,15 @@ class CodeActionHandler {
             return actions;
         }
 
-        return genCodeActionsForSuggestions(dictionary);
+        try {
+            log('CodeAction generate suggestions', uri);
+            return await genCodeActionsForSuggestions(dictionary);
+        } catch (e) {
+            logError(format('CodeAction generate suggestions Error', e), uri);
+            return [];
+        } finally {
+            log('CodeAction generate suggestions Done.', uri);
+        }
     }
 
     private async handlerESLint(handlerContext: CodeActionHandlerContext): Promise<CodeAction[]> {
@@ -194,15 +208,15 @@ class CodeActionHandler {
         if (eslintSpellCheckerDiags.length > 1) return [];
 
         const { settings: docSetting, dictionary } = await this.getSettings(textDocument);
-        const pWorkspaceConfig = this.clientApi.sendOnWorkspaceConfigForDocumentRequest({ uri });
+        const pWorkspaceConfig = this.dependencies.fetchWorkspaceConfigForDocument(uri);
 
         async function genCodeActions(_dictionary: SpellingDictionary) {
             const word = extractText(textDocument, params.range);
             // Only suggest adding if it is our diagnostic and there is a word.
             if (word && eslintSpellCheckerDiags.length) {
                 const wConfig = await pWorkspaceConfig;
-                const targets = calculateConfigTargets(docSetting, wConfig);
-                debugTargets && logTargets(targets);
+                const targets = await calculateConfigTargets(docSetting, wConfig);
+                if (debugTargets) logTargets(targets);
 
                 if (!docSetting.hideAddToDictionaryCodeActions) {
                     actions.push(...generateTargetActions(textDocument, eslintSpellCheckerDiags, word, targets));
@@ -243,7 +257,7 @@ const directivesToHide: Record<string, true | undefined> = {
 
 function suggestionToTitle(sug: Suggestion, issueType: IssueType): string | undefined {
     const sugWord = sug.word;
-    if (issueType === IssueType.spelling) return sugWord + (sug.isPreferred ? ' (Auto Fix)' : '');
+    if (issueType === IssueType.spelling) return sugWord + (sug.isPreferred ? ' (preferred)' : '');
     if (sugWord in directivesToHide) return undefined;
     return directiveToTitle[sugWord] || 'cspell\x3a' + sugWord;
 }

@@ -17,12 +17,10 @@
   "typings": "dist/main.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/main.cjs",
-      "require": "./dist/main.cjs"
+      "import": "./dist/main.cjs"
     },
     "./api": {
-      "import": "./dist/api.cjs",
-      "require": "./dist/api.cjs"
+      "import": "./dist/api.cjs"
     }
   },
   "typesVersions": {
@@ -42,18 +40,19 @@
     }
   },
   "devDependencies": {
-    "ts-loader": "^9.4.4",
-    "webpack": "^5.88.2",
-    "webpack-cli": "^5.1.4"
+    "ts-loader": "^9.5.2",
+    "webpack": "^5.97.1",
+    "webpack-cli": "^6.0.1",
+    "yargs": "^17.7.2"
   },
   "dependencies": {
-    "@cspell/cspell-types": "^7.3.6",
+    "@cspell/cspell-types": "^8.17.2",
     "@internal/common-utils": "file:../__utils",
-    "cspell-lib": "^7.3.6",
-    "regexp-worker": "^2.0.2",
-    "vscode-languageserver-textdocument": "^1.0.11",
+    "cspell-lib": "^8.17.2",
+    "regexp-worker": "^3.0.0",
     "vscode-languageserver": "^9.0.1",
-    "vscode-uri": "^3.0.7"
+    "vscode-languageserver-textdocument": "^1.0.12",
+    "vscode-uri": "^3.0.8"
   },
   "scripts": {
     "build": "npm run build:esbuild && npm run build:api && npm run build:tsc",
@@ -75,6 +74,6 @@
     "watch:tsc": "npm run build:tsc -- --watch"
   },
   "engines": {
-    "node": ">18.0.0"
+    "node": ">20.0.0"
   }
 }

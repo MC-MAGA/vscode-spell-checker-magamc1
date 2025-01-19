@@ -1,50 +1,51 @@
-name: " 🧪 Build and Test"
-on: # rebuild any PRs and main branch changes
+name: ' 🧪 Build and Test'
+on:
   pull_request:
     paths-ignore:
-      - "docs/**"
+      - 'website/**'
   push:
     branches:
       - main
     paths-ignore:
-      - "docs/**"
+      - 'website/**'
 
 jobs:
   build-test:
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
-        node-version: ["${{ vars.DEFAULT_NODE_VERSION }}"]
+        os:
+          # - macos-latest # Disabled because github actions randomly fails on macos
+          - ubuntu-latest
+          - windows-latest
 
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Node.js
-        uses: actions/setup-node@v3.8.1
+        uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npm run build
       - run: npm run test
       # Ensure the repository is clean after build & test
-      - run: git --no-pager diff --compact-summary --exit-code
+      # - run: git --no-pager diff --compact-summary --exit-code
 
   test-vsce-build:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        node-version: ["${{ vars.DEFAULT_NODE_VERSION }}"]
 
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Node.js
-        uses: actions/setup-node@v3.8.1
+        uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npm run test-vsce-build

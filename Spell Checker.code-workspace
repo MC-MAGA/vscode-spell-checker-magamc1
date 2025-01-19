@@ -17,10 +17,6 @@
             "path": "packages/_serverPatternMatcher"
         },
         {
-            "name": "Settings Viewer",
-            "path": "packages/_settingsViewer"
-        },
-        {
             "name": "Integration Tests",
             "path": "packages/_integrationTests"
         },
@@ -33,13 +29,12 @@
             "path": "tools/build-tools"
         },
         { "path": "packages/utils-disposables" },
+        { "path": "packages/utils-logger" },
+        { "path": "packages/json-rpc-api" },
         { "path": "packages/webview-api" },
         { "path": "packages/webview-rpc" },
         { "path": "packages/webview-ui" },
-        {
-            "name": "Docs",
-            "path": "docs"
-        }
+        { "path": "website" }
     ],
     "settings": {
         "cSpell.import": ["${workspaceFolder:Spell Checker Root}/cspell.config.yaml"],
@@ -48,7 +43,8 @@
         "editor.formatOnSave": true,
         "files.eol": "\n",
         "cSpell.flagWords": [],
-        "cSpell.enableFiletypes": ["github-actions-workflow"]
+        "cSpell.enabledFileTypes": { "github-actions-workflow": true },
+        "svg.preview.background": "dark-transparent"
     },
     "launch": {
         "configurations": [
@@ -56,9 +52,10 @@
                 "type": "node",
                 "request": "launch",
                 "name": "Test: Jest current-file",
-                "program": "${fileWorkspaceFolder}/../../node_modules/jest/bin/jest",
+                "program": "${workspaceFolder:Client}/../../node_modules/jest/bin/jest",
                 "cwd": "${fileDirname}",
                 "args": ["--runInBand", "${fileBasename}"],
+                "env": { "NODE_OPTIONS": "--experimental-vm-modules" },
                 "console": "integratedTerminal",
                 "internalConsoleOptions": "neverOpen"
             },
@@ -66,9 +63,10 @@
                 "type": "node",
                 "request": "launch",
                 "name": "Test: Jest Entire Folder",
-                "program": "${fileWorkspaceFolder}/../../node_modules/jest/bin/jest",
+                "program": "${workspaceFolder:Client}/../../node_modules/jest/bin/jest",
                 "cwd": "${fileWorkspaceFolder}",
                 "args": ["--runInBand"],
+                "env": { "NODE_OPTIONS": "--experimental-vm-modules" },
                 "console": "integratedTerminal",
                 "internalConsoleOptions": "neverOpen"
             },
@@ -77,9 +75,9 @@
                 "request": "launch",
                 "name": "Test: Vitest current-file",
                 "autoAttachChildProcesses": true,
-                "program": "${fileWorkspaceFolder}/../../node_modules/vitest/vitest.mjs",
+                "program": "${workspaceFolder:Client}/../../node_modules/vitest/vitest.mjs",
                 "cwd": "${fileWorkspaceFolder}",
-                "args": ["run", "${relativeFile}"],
+                "args": ["run", "--test-timeout=600000", "${relativeFile}"],
                 "console": "integratedTerminal"
             },
             {
@@ -87,9 +85,9 @@
                 "request": "launch",
                 "name": "Test: Vitest Entire Folder",
                 "autoAttachChildProcesses": true,
-                "program": "${fileWorkspaceFolder}/../../node_modules/vitest/vitest.mjs",
+                "program": "${workspaceFolder:Client}/../../node_modules/vitest/vitest.mjs",
                 "cwd": "${fileWorkspaceFolder}",
-                "args": ["run"],
+                "args": ["run", "--test-timeout=600000"],
                 "console": "integratedTerminal"
             }
         ],

@@ -3,28 +3,47 @@
 
 import type { LanguageSetting, OverrideSettings } from '@cspell/cspell-types';
 
+import type { AppearanceSettings } from './AppearanceSettings.mjs';
 import type { CSpellSettingsPackageProperties } from './CSpellSettingsPackageProperties.mjs';
 import type { DictionaryDef } from './CustomDictionary.mjs';
-import type { SpellCheckerSettings } from './SpellCheckerSettings.mjs';
+import type { FileTypesAndSchemeSettings } from './FileTypesAndSchemeSettings.mjs';
+import type { PrefixWithCspell } from './Generics.mjs';
+import type {
+    AdvancedSettings,
+    ExperimentalSettings,
+    SpellCheckerBehaviorSettings,
+    SpellCheckerSettings,
+} from './SpellCheckerSettings.mjs';
 
-interface InternalSettings {
-    /**
-     * Map of known and enabled file types.
-     * `true` - enabled
-     * `false` - disabled
-     * @hidden
-     */
-    mapOfEnabledFileTypes?: Map<string, boolean>;
-}
+type InternalSettings = object;
 
-export interface CSpellUserSettings extends SpellCheckerSettings, CSpellSettingsPackageProperties, InternalSettings {}
+export interface CSpellUserAndExtensionSettings extends SpellCheckerSettings, CSpellSettingsPackageProperties, InternalSettings {}
 
 export type SpellCheckerSettingsProperties = keyof SpellCheckerSettings;
-export type SpellCheckerSettingsVSCodePropertyKeys = `cspell.${keyof CSpellUserSettings}`;
+export type SpellCheckerSettingsVSCodePropertyKeys = `cspell.${keyof CSpellUserAndExtensionSettings}`;
 
 interface DictionaryDefinitions {
     /**
-     * Define additional available dictionaries.
+     * Define custom dictionaries.
+     * If `addWords` is `true` words will be added to this dictionary.
+     *
+     * This setting is subject to User/Workspace settings precedence rules: [Visual Studio Code User and Workspace Settings](https://code.visualstudio.com/docs/getstarted/settings#_settings-precedence).
+     *
+     * It is better to use `#cSpell.customDictionaries#`
+     *
+     * **Example:**
+     *
+     * ```js
+     * "cSpell.dictionaryDefinitions": [
+     *   {
+     *     "name": "project-words",
+     *     "path": "${workspaceRoot}/project-words.txt",
+     *     "description": "Words used in this project",
+     *     "addWords": true
+     *   }
+     * ]
+     * ```
+     * @title Dictionary Definitions
      * @scope resource
      */
     dictionaryDefinitions?: DictionaryDef[];
@@ -40,7 +59,11 @@ interface LanguageSettings {
     languageSettings?: LanguageSettingsReduced[];
 }
 
-type OverridesReduced = Omit<OverrideSettings, 'dictionaryDefinitions' | 'languageSettings'> & DictionaryDefinitions & LanguageSettings;
+type OverridesReduced = Omit<OverrideSettings, 'dictionaryDefinitions' | 'languageSettings'> &
+    DictionaryDefinitions &
+    LanguageSettings &
+    Pick<SpellCheckerSettings, 'diagnosticLevel' | 'diagnosticLevelFlaggedWords'>;
+
 interface Overrides {
     /**
      * Overrides are used to apply settings for specific files in your project.
@@ -85,22 +108,19 @@ type CSpellOmitFieldsFromExtensionContributesInPackageJson =
 
 export interface SpellCheckerSettingsVSCodeBase
     extends Omit<
-            CSpellUserSettings,
-            CSpellOmitFieldsFromExtensionContributesInPackageJson | 'dictionaryDefinitions' | 'languageSettings' | 'overrides'
+            CSpellUserAndExtensionSettings,
+            CSpellOmitFieldsFromExtensionContributesInPackageJson | keyof DictionaryDefinitions | keyof LanguageSettings | keyof Overrides
         >,
         DictionaryDefinitions,
         LanguageSettings,
         Overrides {}
 
 export type AllSpellCheckerSettingsInVSCode = SpellCheckerSettingsVSCodeBase;
-
-type Prefix<T, P extends string> = {
-    [K in keyof T as K extends string ? `${P}${K}` : K]: T[K];
-};
-type PrefixWithCspell<T> = Prefix<T, 'cSpell.'>;
+export type AllSpellCheckerSettingsInVSCodeWithPrefix = PrefixWithCspell<AllSpellCheckerSettingsInVSCode>;
 
 /**
  * @title Code Spell Checker
+ * @description Settings that control the behavior of the spell checker.
  * @order 0
  */
 type VSConfigRoot = PrefixWithCspell<_VSConfigRoot>;
@@ -108,6 +128,7 @@ type _VSConfigRoot = Pick<SpellCheckerSettingsVSCodeBase, 'enabled'>;
 
 /**
  * @title Languages and Dictionaries
+ * @description Settings that control dictionaries and language preferences.
  * @order 1
  */
 type VSConfigLanguageAndDictionaries = PrefixWithCspell<_VSConfigLanguageAndDictionaries>;
@@ -123,12 +144,15 @@ type _VSConfigLanguageAndDictionaries = Pick<
     | 'language'
     | 'languageSettings'
     | 'noSuggestDictionaries'
+    | 'suggestWords'
+    | 'useLocallyInstalledCSpellDictionaries'
     | 'userWords'
     | 'words'
 >;
 
 /**
  * @title Reporting and Display
+ * @description Settings that control how the spell checker reports and displays errors.
  * @order 2
  */
 type VSConfigReporting = PrefixWithCspell<_VSConfigReporting>;
@@ -136,23 +160,25 @@ type _VSConfigReporting = Pick<
     SpellCheckerSettingsVSCodeBase,
     | 'autoFormatConfigFile'
     | 'diagnosticLevel'
+    | 'diagnosticLevelFlaggedWords'
     | 'hideAddToDictionaryCodeActions'
     | 'maxDuplicateProblems'
     | 'maxNumberOfProblems'
     | 'minWordLength'
     | 'numSuggestions'
-    | 'showAutocompleteSuggestions'
+    // | 'reportUnknownWords' // to ba added when it has been finalized.
+    | 'showAutocompleteDirectiveSuggestions'
     | 'showCommandsInEditorContextMenu'
-    | 'showStatus'
-    | 'showStatusAlignment'
     | 'showSuggestionsLinkInEditorContextMenu'
     | 'suggestionMenuType'
     | 'suggestionNumChanges'
     | 'validateDirectives'
+    | keyof SpellCheckerBehaviorSettings
 >;
 
 /**
  * @title Performance
+ * @description Settings that control the performance of the spell checker.
  * @order 4
  */
 type VSConfigPerf = PrefixWithCspell<_VSConfigPerf>;
@@ -168,12 +194,14 @@ type _VSConfigPerf = Pick<
 
 /**
  * @title CSpell
+ * @description Settings related to CSpell Command Line Tool.
  * @order 5
  */
 type VSConfigCSpell = PrefixWithCspell<_VSConfigCSpell>;
 type _VSConfigCSpell = Omit<
     SpellCheckerSettingsVSCodeBase,
     | keyof _VSConfigAdvanced
+    | keyof _VSConfigAppearance
     | keyof _VSConfigExperimental
     | keyof _VSConfigLanguageAndDictionaries
     | keyof _VSConfigLegacy
@@ -185,6 +213,7 @@ type _VSConfigCSpell = Omit<
 
 /**
  * @title Files, Folders, and Workspaces
+ * @description Settings that control which files and folders are spell checked.
  * @order 3
  */
 type VSConfigFilesAndFolders = PrefixWithCspell<_VSConfigFilesAndFolders>;
@@ -192,48 +221,76 @@ type _VSConfigFilesAndFolders = Pick<
     SpellCheckerSettingsVSCodeBase,
     | 'allowedSchemas'
     | 'checkOnlyEnabledFileTypes'
+    | 'checkVSCodeSystemFiles'
     | 'enableFiletypes'
     | 'files'
     | 'globRoot'
     | 'ignorePaths'
     | 'import'
+    | 'mergeCSpellSettings'
+    | 'mergeCSpellSettingsFields'
     | 'noConfigSearch'
     | 'spellCheckOnlyWorkspaceFiles'
     | 'useGitignore'
     | 'usePnP'
     | 'workspaceRootPath'
+    | keyof FileTypesAndSchemeSettings
 >;
 
 /**
+ * @title Appearance
+ * @description Settings that control the appearance of the spell checker.
+ * @order 6
+ */
+type VSConfigAppearance = PrefixWithCspell<_VSConfigAppearance>;
+type _VSConfigAppearance = Pick<SpellCheckerSettingsVSCodeBase, keyof AppearanceSettings>;
+
+/**
  * @title Legacy
+ * @description Legacy settings that have been deprecated or are not commonly used.
  * @order 20
  */
 type VSConfigLegacy = PrefixWithCspell<_VSConfigLegacy>;
 type _VSConfigLegacy = Pick<
     SpellCheckerSettingsVSCodeBase,
-    'enabledLanguageIds' | 'allowCompoundWords' | 'customFolderDictionaries' | 'customUserDictionaries' | 'customWorkspaceDictionaries'
+    | 'allowCompoundWords'
+    | 'customFolderDictionaries'
+    | 'customUserDictionaries'
+    | 'customWorkspaceDictionaries'
+    | 'enabledLanguageIds'
+    | 'showStatus'
+    | 'showStatusAlignment'
 >;
 
 /**
  * @title Advanced
+ * @description Advanced settings that are not commonly used.
  * @order 18
  */
-type VSConfigAdvanced = PrefixWithCspell<_VSConfigAdvanced>;
+export type VSConfigAdvanced = PrefixWithCspell<_VSConfigAdvanced>;
 type _VSConfigAdvanced = Pick<
     SpellCheckerSettingsVSCodeBase,
+    | keyof AdvancedSettings
     | 'advanced.feature.useReferenceProviderWithRename'
     | 'advanced.feature.useReferenceProviderRemove'
     | 'fixSpellingWithRenameProvider'
     | 'logFile'
     | 'logLevel'
+    | 'trustedWorkspace'
 >;
 
 /**
  * @title Experimental
+ * @description Experimental settings that may change or be removed in the future.
  * @order 19
  */
 type VSConfigExperimental = PrefixWithCspell<_VSConfigExperimental>;
-type _VSConfigExperimental = Pick<SpellCheckerSettingsVSCodeBase, 'experimental.enableRegexpView' | 'experimental.enableSettingsViewerV2'>;
+type _VSConfigExperimental = Pick<
+    SpellCheckerSettingsVSCodeBase,
+    | keyof ExperimentalSettings
+    // The plan is to move `reportUnknownWords` to the reporting section.
+    | 'reportUnknownWords'
+>;
 
 export type SpellCheckerSettingsVSCode = [
     VSConfigRoot,
@@ -242,6 +299,7 @@ export type SpellCheckerSettingsVSCode = [
     VSConfigExperimental,
     VSConfigFilesAndFolders,
     VSConfigLanguageAndDictionaries,
+    VSConfigAppearance,
     VSConfigLegacy,
     VSConfigPerf,
     VSConfigReporting,

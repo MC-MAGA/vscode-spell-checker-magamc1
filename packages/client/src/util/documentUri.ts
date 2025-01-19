@@ -1,14 +1,7 @@
-import type { Uri } from 'vscode';
-import { workspace } from 'vscode';
+import type { ConfigurationScope, NotebookCell, NotebookDocument, TextDocument } from 'vscode';
+import { Uri, workspace } from 'vscode';
 
-const _schemaFile = {
-    file: true,
-    untitled: true,
-} as const;
-
-const _schemaMapToFile = {
-    'vscode-notebook-cell': true,
-} as const;
+import { findTextDocument } from '../vscode/findEditor';
 
 const _schemeBlocked = {
     git: true,
@@ -17,37 +10,83 @@ const _schemeBlocked = {
     vscode: true,
 } as const;
 
-const schemeFile: Record<string, true> = Object.freeze(Object.assign(Object.create(null), _schemaFile));
 const schemeBlocked: Record<string, true> = Object.freeze(Object.assign(Object.create(null), _schemeBlocked));
-const schemeMapToFile: Record<string, true> = Object.freeze(Object.assign(Object.create(null), _schemaMapToFile));
 
-export function findConicalDocumentScope(docUri: Uri | undefined): Uri | undefined {
+export function findConicalDocumentScope(docUri: Uri | undefined): ConfigurationScope | undefined {
     if (docUri === undefined) return undefined;
     if (docUri.scheme in schemeBlocked) return undefined;
-    if (docUri.scheme in schemeFile) return docUri;
-
-    const path = docUri.path;
-
-    // Search the open notebooks for a match.
-    for (const doc of workspace.notebookDocuments) {
-        const uri = doc.uri;
-        if (uri.path === path) {
-            return uri;
+    const doc = findTextDocumentForUri(docUri);
+    // console.log('findConicalDocumentScope %o', { docUri: docUri.toString(true), doc: doc?.uri.toString(true) });
+    if (doc) {
+        const cell = findNotebookCell(docUri);
+        if (cell) {
+            return {
+                uri: cell.notebook.uri,
+                languageId: cell.document.languageId,
+            };
         }
+        return doc;
     }
-
-    // Search the open documents for a match.
-    for (const doc of workspace.textDocuments) {
-        const uri = doc.uri;
-        if (uri.path === path && uri.scheme === 'file') {
-            return uri;
-        }
-    }
-
-    if (docUri.scheme in schemeMapToFile) {
-        return docUri.with({ scheme: 'file', query: '', fragment: '' });
-    }
+    if (docUri.scheme === 'file') return docUri;
 
     // Hope for the best.
-    return docUri;
+    return undefined;
+}
+
+function findTextDocumentForUri(uri: Uri): TextDocument | undefined {
+    const doc = findTextDocument(uri);
+    if (doc) return doc;
+
+    // Search for matching path.
+    const folderSchemes = new Set(workspace.workspaceFolders?.map((f) => f.uri.scheme)).add('file');
+
+    let possibleDoc: TextDocument | undefined = undefined;
+
+    const path = uri.path;
+    for (const doc of workspace.textDocuments) {
+        const uri = doc.uri;
+        if (uri.path === path) {
+            possibleDoc = doc;
+            if (folderSchemes.has(uri.scheme)) {
+                return doc;
+            }
+        }
+    }
+    return possibleDoc;
+}
+
+export function isNotebookTextDocument(doc: TextDocument): boolean {
+    return doc.uri.scheme === 'vscode-notebook-cell';
+}
+
+export function isNotebookTextDocumentUri(uri: Uri): boolean {
+    return uri.scheme === 'vscode-notebook-cell';
+}
+
+export function findNotebookCellForDocument(doc: TextDocument): NotebookCell | undefined {
+    return findNotebookCell(doc.uri);
+}
+
+export function findNotebookCell(uri: Uri): NotebookCell | undefined {
+    if (!isNotebookTextDocumentUri(uri)) return undefined;
+
+    for (const notebook of workspace.notebookDocuments) {
+        const cells = notebook.getCells();
+        const cell = cells.find((cell) => cell.document.uri.toString() === uri.toString());
+        if (cell) return cell;
+    }
+    return undefined;
+}
+
+export function findConicalDocument(doc: TextDocument): TextDocument | NotebookDocument {
+    const cell = findNotebookCellForDocument(doc);
+    if (cell) return cell.notebook;
+    return doc;
+}
+
+export function extractUriFromConfigurationScope(scope: ConfigurationScope | undefined): Uri | undefined {
+    if (!scope) return undefined;
+    if (scope instanceof Uri) return scope;
+    if ('uri' in scope) return scope.uri;
+    return undefined;
 }

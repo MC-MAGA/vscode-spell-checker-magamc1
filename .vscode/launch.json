@@ -10,10 +10,44 @@
                 "--disable-extensions",
                 "--extensionDevelopmentPath=${workspaceRoot}"
             ],
-            "stopOnEntry": false,
             "sourceMaps": true,
             "outFiles": [
-                "${workspaceRoot}/packages/client/dist/**/*.js"
+                "${workspaceRoot}/packages/client/dist/**"
+            ],
+            "smartStep": true,
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
+        },
+        {
+            "name": "Client: Launch Extension -- All extensions",
+            "type": "extensionHost",
+            "request": "launch",
+            "runtimeExecutable": "${execPath}",
+            "args": [
+                "--extensionDevelopmentPath=${workspaceRoot}"
+            ],
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceRoot}/packages/client/dist/**"
+            ],
+            "smartStep": true,
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
+        },
+        {
+            "name": "Client: Launch Extension -- virtual workspace",
+            "type": "extensionHost",
+            "request": "launch",
+            "runtimeExecutable": "${execPath}",
+            "args": [
+                "--extensionDevelopmentPath=${workspaceRoot}",
+                "--folder-uri=vscode-vfs://github/streetsidesoftware/cspell-dicts"
+            ],
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceRoot}/packages/client/dist/**"
             ],
             "smartStep": true,
             "skipFiles": [
@@ -32,7 +66,7 @@
             ],
             "sourceMaps": true,
             "outFiles": [
-                "${workspaceRoot}/packages/client/dist/**/*.js"
+                "${workspaceRoot}/packages/client/dist/**"
             ],
             "smartStep": true,
             "skipFiles": [
@@ -49,10 +83,9 @@
                 "--extensionDevelopmentPath=${workspaceRoot}",
                 "${workspaceRoot}/fixtures/workspaces/multi-root/multi-root.code-workspace"
             ],
-            "stopOnEntry": false,
             "sourceMaps": true,
             "outFiles": [
-                "${workspaceRoot}/packages/client/dist/**/*.js"
+                "${workspaceRoot}/packages/client/dist/**"
             ],
             "smartStep": true,
             "skipFiles": [
@@ -69,10 +102,9 @@
                 "--extensionDevelopmentPath=${workspaceRoot}",
                 "${workspaceRoot}/fixtures/workspaces/single-root/single-root.code-workspace"
             ],
-            "stopOnEntry": false,
             "sourceMaps": true,
             "outFiles": [
-                "${workspaceRoot}/packages/client/dist/**/*.js"
+                "${workspaceRoot}/packages/client/dist/**"
             ],
             "smartStep": true,
             "skipFiles": [
@@ -89,10 +121,9 @@
                 "--extensionDevelopmentPath=${workspaceRoot}",
                 "${workspaceRoot}/fixtures/workspaces/single/single.code-workspace"
             ],
-            "stopOnEntry": false,
             "sourceMaps": true,
             "outFiles": [
-                "${workspaceRoot}/packages/client/dist/**/*.js"
+                "${workspaceRoot}/packages/client/dist/**"
             ],
             "smartStep": true,
             "skipFiles": [
@@ -109,10 +140,28 @@
                 "--extensionDevelopmentPath=${workspaceRoot}",
                 "${workspaceRoot}/fixtures/workspaces/no-workspace"
             ],
-            "stopOnEntry": false,
             "sourceMaps": true,
             "outFiles": [
-                "${workspaceRoot}/packages/client/dist/**/*.js"
+                "${workspaceRoot}/packages/client/dist/**"
+            ],
+            "smartStep": true,
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
+        },
+        {
+            "name": "Client: Launch Extension - single file",
+            "type": "extensionHost",
+            "request": "launch",
+            "runtimeExecutable": "${execPath}",
+            "args": [
+                "--disable-extensions",
+                "--extensionDevelopmentPath=${workspaceRoot}",
+                "${workspaceRoot}/fixtures/workspaces/single/README.md"
+            ],
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceRoot}/packages/client/dist/**"
             ],
             "smartStep": true,
             "skipFiles": [
@@ -129,10 +178,9 @@
                 "--extensionDevelopmentPath=${workspaceRoot}",
                 "${workspaceRoot}/fixtures/workspaces/jupyter"
             ],
-            "stopOnEntry": false,
             "sourceMaps": true,
             "outFiles": [
-                "${workspaceRoot}/packages/client/dist/**/*.js"
+                "${workspaceRoot}/packages/client/dist/**"
             ],
             "smartStep": true,
             "skipFiles": [

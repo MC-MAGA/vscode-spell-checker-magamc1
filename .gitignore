@@ -42,13 +42,13 @@ node_modules
 
 /temp
 /build
-modules/dist/
-modules/*/dist/
+/dist
 packages/*/dist/
 packages/*/out/
 packages/*/temp/
 tools/*/dist/
 tools/*/temp/
+website/build
 
 !**/server/.vscode
 !**/client/.vscode

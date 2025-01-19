@@ -1,8 +1,39 @@
-import type { EnableFileTypeId, RegExpString } from './annotatedTypes.mjs';
+import type { RegExpString } from './annotatedTypes.mjs';
+import type { AppearanceSettings } from './AppearanceSettings.mjs';
+import type { CSpellMergeFields } from './CSpellSettingsPackageProperties.mjs';
 import type { CustomDictionaries, CustomDictionaryEntry } from './CustomDictionary.mjs';
+import type { FileTypesAndSchemeSettings } from './FileTypesAndSchemeSettings.mjs';
 import type { SpellCheckerShouldCheckDocSettings } from './SpellCheckerShouldCheckDocSettings.mjs';
 
-export interface SpellCheckerSettings extends SpellCheckerShouldCheckDocSettings {
+export type DiagnosticLevel = 'Error' | 'Warning' | 'Information' | 'Hint';
+
+/**
+ * Diagnostic level for source control _commit_ messages. Issues found by the spell checker are marked with a Diagnostic Severity Level.
+ * This affects the color of the squiggle.
+ *
+ * By default, this setting will match `#cSpell.diagnosticLevel#`.
+ *
+ * See: [VS Code Diagnostic Severity Level](https://code.visualstudio.com/api/references/vscode-api#DiagnosticSeverity)
+ * @title Set Diagnostic Reporting Level
+ * @since 4.0.0
+ * @enumDescriptions [
+ *  "Report Spelling Issues as Errors",
+ *  "Report Spelling Issues as Warnings",
+ *  "Report Spelling Issues as Information",
+ *  "Report Spelling Issues as Hints, will not show up in Problems"
+ *  "Do not Report Spelling Issues"]
+ */
+export type DiagnosticLevelExt = 'Error' | 'Warning' | 'Information' | 'Hint' | 'Off';
+
+export type UseVSCodeDiagnosticSeverity = Record<string, DiagnosticLevelExt>;
+
+export interface SpellCheckerSettings
+    extends SpellCheckerShouldCheckDocSettings,
+        FileTypesAndSchemeSettings,
+        SpellCheckerBehaviorSettings,
+        AppearanceSettings,
+        ExperimentalSettings,
+        AdvancedSettings {
     /**
      * If a `cspell` configuration file is updated, format the configuration file
      * using the VS Code Format Document Provider. This will cause the configuration
@@ -14,14 +45,20 @@ export interface SpellCheckerSettings extends SpellCheckerShouldCheckDocSettings
     autoFormatConfigFile?: boolean;
 
     /**
-     * The limit in K-Characters to be checked in a file.
+     * Set the maximum number of blocks of text to check.
+     * Each block is 1024 characters.
      * @scope resource
      * @default 500
      */
     checkLimit?: number;
 
     /**
-     * Issues found by the spell checker are marked with a Diagnostic Severity Level. This affects the color of the squiggle.
+     * The Diagnostic Severity Level determines how issues are shown in the Problems Pane and within the document.
+     * Set the level to `Hint` to hide the issues from the Problems Pane.
+     *
+     * Note: `#cSpell.useCustomDecorations#` must be `false` to use VS Code Diagnostic Severity Levels.
+     *
+     * See: [VS Code Diagnostic Severity Level](https://code.visualstudio.com/api/references/vscode-api#DiagnosticSeverity)
      * @title Set Diagnostic Reporting Level
      * @scope resource
      * @default "Information"
@@ -31,22 +68,23 @@ export interface SpellCheckerSettings extends SpellCheckerShouldCheckDocSettings
      *  "Report Spelling Issues as Information",
      *  "Report Spelling Issues as Hints, will not show up in Problems"]
      */
-    diagnosticLevel?: 'Error' | 'Warning' | 'Information' | 'Hint';
+    diagnosticLevel?: DiagnosticLevel;
 
     /**
-     * Control which file schemas will be checked for spelling (VS Code must be restarted for this setting to take effect).
+     * Flagged word issues found by the spell checker are marked with a Diagnostic Severity Level. This affects the color of the squiggle.
+     * By default, flagged words will use the same diagnostic level as general issues. Use this setting to customize them.
      *
-     *
-     * Some schemas have special meaning like:
-     * - `untitled` - Used for new documents that have not yet been saved
-     * - `vscode-notebook-cell` - Used for validating segments of a Notebook.
-     * - `vscode-userdata` - Needed to spell check `.code-snippets`
-     * - `vscode-scm` - Needed to spell check Source Control commit messages.
-     * @title Define Allowed Schemas
-     * @scope window
-     * @default ["file", "gist", "repo", "sftp", "untitled", "vscode-notebook-cell", "vscode-scm", "vscode-userdata"]
+     * See: [VS Code Diagnostic Severity Level](https://code.visualstudio.com/api/references/vscode-api#DiagnosticSeverity)
+     * @title Set Diagnostic Reporting Level for Flagged Words
+     * @scope resource
+     * @since 4.0.0
+     * @enumDescriptions [
+     *  "Report Spelling Issues as Errors",
+     *  "Report Spelling Issues as Warnings",
+     *  "Report Spelling Issues as Information",
+     *  "Report Spelling Issues as Hints, will not show up in Problems"]
      */
-    allowedSchemas?: string[];
+    diagnosticLevelFlaggedWords?: DiagnosticLevel;
 
     /**
      * Set the Debug Level for logging messages.
@@ -73,6 +111,7 @@ export interface SpellCheckerSettings extends SpellCheckerShouldCheckDocSettings
      * Display the spell checker status on the status bar.
      * @scope application
      * @default true
+     * @deprecationMessage No longer used.
      */
     showStatus?: boolean;
 
@@ -83,6 +122,8 @@ export interface SpellCheckerSettings extends SpellCheckerShouldCheckDocSettings
      * @enumDescriptions [
      *  "Left Side of Statusbar",
      *  "Right Side of Statusbar"]
+     * @deprecated true
+     * @deprecationMessage No longer supported.
      */
     showStatusAlignment?: 'Left' | 'Right';
 
@@ -91,9 +132,9 @@ export interface SpellCheckerSettings extends SpellCheckerShouldCheckDocSettings
      *
      * **Note:** VS Code must be restarted for this setting to take effect.
      * @scope language-overridable
-     * @default false
+     * @default true
      */
-    showAutocompleteSuggestions?: boolean;
+    showAutocompleteDirectiveSuggestions?: boolean;
 
     /**
      * Delay in ms after a document has changed before checking it for spelling errors.
@@ -110,31 +151,6 @@ export interface SpellCheckerSettings extends SpellCheckerShouldCheckDocSettings
     fixSpellingWithRenameProvider?: boolean;
 
     /**
-     * Use the Reference Provider when fixing spelling issues with the Rename Provider.
-     * This feature is used in connection with `#cSpell.fixSpellingWithRenameProvider#`
-     * @title Use Reference Provider During Rename
-     * @scope language-overridable
-     * @default false
-     */
-    'advanced.feature.useReferenceProviderWithRename'?: boolean;
-
-    /**
-     * Used to work around bugs in Reference Providers and Rename Providers.
-     * Anything matching the provided Regular Expression will be removed from the text
-     * before sending it to the Rename Provider.
-     *
-     * See: [Markdown: Fixing spelling issues in Header sections changes the entire line · Issue #1987](https://github.com/streetsidesoftware/vscode-spell-checker/issues/1987)
-     *
-     * It is unlikely that you would need to edit this setting. If you need to, please open an issue at
-     * [Spell Checker Issues](https://github.com/streetsidesoftware/vscode-spell-checker/issues)
-     *
-     * This feature is used in connection with `#cSpell.advanced.feature.useReferenceProviderWithRename#`
-     * @title Remove Matching Characters Before Rename
-     * @scope language-overridable
-     */
-    'advanced.feature.useReferenceProviderRemove'?: RegExpString;
-
-    /**
      * Show Spell Checker actions in Editor Context Menu
      * @scope application
      * @default true
@@ -147,45 +163,6 @@ export interface SpellCheckerSettings extends SpellCheckerShouldCheckDocSettings
      * @default true
      */
     showSuggestionsLinkInEditorContextMenu?: boolean;
-
-    /**
-     * Enable / Disable checking file types (languageIds).
-     *
-     * These are in additional to the file types specified by `#cSpell.enabledLanguageIds#`.
-     * To disable a language, prefix with `!` as in `!json`,
-     *
-     *
-     * **Example: individual file types**
-     *
-     * ```
-     * jsonc       // enable checking for jsonc
-     * !json       // disable checking for json
-     * kotlin      // enable checking for kotlin
-     * ```
-     *
-     * **Example: enable all file types**
-     *
-     * ```
-     * *           // enable checking for all file types
-     * !json       // except for json
-     * ```
-     * @title File Types to Check
-     * @scope resource
-     * @uniqueItems true
-     */
-    enableFiletypes?: EnableFileTypeId[];
-
-    /**
-     * By default, the spell checker checks only enabled file types. Use `#cSpell.enableFiletypes#`
-     * to turn on / off various file types.
-     *
-     * When this setting is `false`, all file types are checked except for the ones disabled by `#cSpell.enableFiletypes#`.
-     * See `#cSpell.enableFiletypes#` on how to disable a file type.
-     * @title Check Only Enabled File Types
-     * @scope resource
-     * @default true
-     */
-    checkOnlyEnabledFileTypes?: boolean;
 
     /**
      * Define the path to the workspace root folder in a multi-root workspace.
@@ -282,20 +259,6 @@ export interface SpellCheckerSettings extends SpellCheckerShouldCheckDocSettings
     suggestionMenuType?: 'quickPick' | 'quickFix';
 
     /**
-     * Show Regular Expression Explorer
-     * @scope application
-     * @default false
-     */
-    'experimental.enableRegexpView'?: boolean;
-
-    /**
-     * Enable the Settings Viewer V2 Extension
-     * @scope application
-     * @default false
-     */
-    'experimental.enableSettingsViewerV2'?: boolean;
-
-    /**
      * Hide the options to add words to dictionaries or settings.
      * @scope resource
      * @default false
@@ -322,6 +285,159 @@ export interface SpellCheckerSettings extends SpellCheckerShouldCheckDocSettings
      * @hidden
      */
     // addWordsTo?: AddToTargets;
+
+    /**
+     * Specify if fields from `.vscode/settings.json` are passed to the spell checker.
+     * This only applies when there is a CSpell configuration file in the workspace.
+     *
+     * The purpose of this setting to help provide a consistent result compared to the
+     * CSpell spell checker command line tool.
+     *
+     * Values:
+     * - `true` - all settings will be merged based upon `#cSpell.mergeCSpellSettingsFields#`.
+     * - `false` - only use `.vscode/settings.json` if a CSpell configuration is not found.
+     *
+     * Note: this setting is used in conjunction with `#cSpell.mergeCSpellSettingsFields#`.
+     *
+     * @scope resource
+     * @since 4.0.0
+     * @default true
+     */
+    mergeCSpellSettings?: boolean;
+
+    /**
+     * Specify which fields from `.vscode/settings.json` are passed to the spell checker.
+     * This only applies when there is a CSpell configuration file in the workspace and
+     * `#cSpell.mergeCSpellSettings#` is `true`.
+     *
+     * Values:
+     * - `{ flagWords: true, userWords: false }` - Always allow `flagWords`, but never allow `userWords`.
+     *
+     * Example:
+     * ```jsonc
+     * "cSpell.mergeCSpellSettingsFields": { "userWords": false }
+     * ```
+     *
+     * @scope resource
+     * @since 4.0.0
+     * @default {
+     * "allowCompoundWords":true,"caseSensitive":true,"dictionaries":true,"dictionaryDefinitions":true,
+     * "enableGlobDot":true,"features":true,"files":true,"flagWords":true,"gitignoreRoot":true,"globRoot":true,
+     * "ignorePaths":true,"ignoreRegExpList":true,"ignoreWords":true,"import":true,"includeRegExpList":true,
+     * "language":true,"languageId":true,"languageSettings":true,"loadDefaultConfiguration":true,"minWordLength":true,
+     * "noConfigSearch":true,"noSuggestDictionaries":true,"numSuggestions":true,"overrides":true,
+     * "patterns":true,"pnpFiles":true,"reporters":true,"suggestWords":true,"useGitignore":true,"usePnP":true,
+     * "userWords":true,"validateDirectives":true,"words":true
+     * }
+     */
+    mergeCSpellSettingsFields?: CSpellMergeFields;
+
+    /**
+     * Search for `@cspell/cspell-bundled-dicts` in the workspace folder and use it if found.
+     * @scope resource
+     * @since 4.0.0
+     * @default true
+     */
+    useLocallyInstalledCSpellDictionaries?: boolean;
+
+    /**
+     * Enable loading JavaScript CSpell configuration files.
+     *
+     * This setting is automatically set to `true` in a trusted workspace. It is possible to override the setting to `false` in a trusted workspace,
+     * but a setting of `true` in an untrusted workspace will be ignored.
+     *
+     * See:
+     * - [Visual Studio Code Workspace Trust security](https://code.visualstudio.com/docs/editor/workspace-trust)
+     * - [Workspace Trust Extension Guide -- Visual Studio Code Extension API](https://code.visualstudio.com/api/extension-guides/workspace-trust)
+     * @scope window
+     * @since 4.0.0
+     * @default true
+     */
+    trustedWorkspace?: boolean;
+
+    /**
+     * By default, the spell checker reports all unknown words as misspelled. This setting allows for a more relaxed spell checking, by only
+     * reporting unknown words as suggestions. Common spelling errors are still flagged as misspelled.
+     *
+     * - `true` - report unknown words as misspelled
+     * - `false` - report unknown words as suggestions
+     * @title Strict Spell Checking
+     * @scope language-overridable
+     * @since 4.0.2
+     * @default true
+     */
+    reportUnknownWords?: boolean;
+}
+
+export interface ExperimentalSettings {
+    /**
+     * Show Regular Expression Explorer
+     * @scope application
+     * @default false
+     */
+    'experimental.enableRegexpView'?: boolean;
+
+    /**
+     * Experiment with executeDocumentSymbolProvider.
+     * This feature is experimental and will be removed in the future.
+     * @title Experiment with `executeDocumentSymbolProvider`
+     * @scope application
+     * @default false
+     */
+    'experimental.symbols'?: boolean;
+}
+
+export interface AdvancedSettings {
+    /**
+     * Use the Reference Provider when fixing spelling issues with the Rename Provider.
+     * This feature is used in connection with `#cSpell.fixSpellingWithRenameProvider#`
+     * @title Use Reference Provider During Rename
+     * @scope language-overridable
+     * @default false
+     */
+    'advanced.feature.useReferenceProviderWithRename'?: boolean;
+
+    /**
+     * Used to work around bugs in Reference Providers and Rename Providers.
+     * Anything matching the provided Regular Expression will be removed from the text
+     * before sending it to the Rename Provider.
+     *
+     * See: [Markdown: Fixing spelling issues in Header sections changes the entire line · Issue #1987](https://github.com/streetsidesoftware/vscode-spell-checker/issues/1987)
+     *
+     * It is unlikely that you would need to edit this setting. If you need to, please open an issue at
+     * [Spell Checker Issues](https://github.com/streetsidesoftware/vscode-spell-checker/issues)
+     *
+     * This feature is used in connection with `#cSpell.advanced.feature.useReferenceProviderWithRename#`
+     * @title Remove Matching Characters Before Rename
+     * @scope language-overridable
+     */
+    'advanced.feature.useReferenceProviderRemove'?: RegExpString;
+}
+
+export interface SpellCheckerBehaviorSettings {
+    /**
+     * Control how spelling issues are displayed while typing.
+     * See: `#cSpell.revealIssuesAfterMS#` to control when issues are revealed.
+     * @title Hide Issues While Typing
+     * @scope application
+     * @since 4.0.0
+     * @default "Word"
+     * @enumDescriptions [
+     *  "Show issues while typing",
+     *  "Hide issues while typing in the current word",
+     *  "Hide issues while typing on the line",
+     *  "Hide all issues while typing in the document"]
+     */
+    hideIssuesWhileTyping?: 'Off' | 'Word' | 'Line' | 'Document';
+
+    /**
+     * Reveal hidden issues related to `#cSpell.hideIssuesWhileTyping#` after a delay in milliseconds.
+     * @title Reveal Issues After a Delay in Milliseconds
+     * @scope application
+     * @since 4.0.0
+     * @default 1500
+     */
+    revealIssuesAfterDelayMS?: number;
 }
 
 type AutoOrBoolean = boolean | 'auto';
@@ -371,3 +487,5 @@ export interface AddToTargets extends AddToDictionaryTarget {
      */
     cspell?: AutoOrBoolean;
 }
+
+export type UnknownWordsReportingLevel = 'all' | 'simple' | 'none';

@@ -1,15 +1,11 @@
 import type { CSpellUserSettings } from '@cspell/cspell-types';
+import type { Disposable } from 'vscode-languageserver/node.js';
 
 import { FileWatcher } from '../utils/fileWatcher.mjs';
-import type { Disposable } from '../vscodeLanguageServer/index.cjs';
 
 export type Listener = (eventType?: string, filename?: string) => void;
 
 export class DictionaryWatcher extends FileWatcher implements Disposable {
-    constructor() {
-        super();
-    }
-
     processSettings(finalizedSettings: CSpellUserSettings): void {
         // Only watch used dictionaries.
         const defs = new Map(finalizedSettings.dictionaryDefinitions?.map((def) => [def.name, def.path]));

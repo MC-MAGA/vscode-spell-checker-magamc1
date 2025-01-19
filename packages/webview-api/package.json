@@ -15,13 +15,11 @@
   "author": "Street Side Software",
   "license": "MIT",
   "dependencies": {
+    "json-rpc-api": "file:../json-rpc-api",
     "utils-disposables": "file:../utils-disposables",
-    "vscode-webview-rpc": "file:../webview-rpc"
+    "utils-logger": "file:../utils-logger"
   },
   "engines": {
-    "node": ">18.0.0"
-  },
-  "devDependencies": {
-    "vitest": "^0.34.5"
+    "node": ">20.0.0"
   }
 }

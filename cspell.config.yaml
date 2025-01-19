@@ -1,25 +1,27 @@
 $schema: ./node_modules/@cspell/cspell-types/cspell.schema.json
-version: "0.2"
+version: '0.2'
 language: en-US
 flagWords:
   - hte
 ignorePaths:
-  - .git
+  - .git/*/**
+  - .git/!(COMMIT_EDITMSG)
   - .gitignore
   - .vscodeignore
-  - "*.lock"
-  - "*.log"
-  - "*.vsix"
-  - "*.tsv"
-  - "*.svg"
-  - "**/__snapshots__/**"
-  - "**/server.js"
-  - "**/scripts/ts-json-schema-generator.cjs"
+  - '*.lock'
+  - '*.log'
+  - '*.vsix'
+  - '*.tsv'
+  - '*.svg'
+  - '**/__snapshots__/**'
+  - '**/server.js'
+  - '**/scripts/ts-json-schema-generator.cjs'
   - /samples
   - CHANGELOG.md
   - cspell.json
   - cspell*.{json,yaml}
   - .cspell*.{json,yaml}
+  - dist
   - fixtures/workspaces/**
   - languageCodes.ts
   - package-lock.json
@@ -28,7 +30,6 @@ ignorePaths:
   - packages/client/resources/**
   - packages/client/samples/**
   - packages/client/server/**
-  - packages/client/settingsViewer/**
   - packages/webview-ui/public/assets/**
   - spell-checker-config.schema.json
   - testFixtures
@@ -46,13 +47,16 @@ dictionaries:
   - cities
   - cspell-words
 languageSettings:
-  - languageId: "*"
+  - languageId: '*'
     allowCompoundWords: false
 overrides:
   - filename: package.json
     ignoreWords:
       - colour
       - canot
+  - filename: '**/*.test.*'
+    dictionaries:
+      - lorem-ipsum
 useGitignore: true
 words:
   - dbaeumer

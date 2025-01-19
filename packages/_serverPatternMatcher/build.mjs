@@ -35,6 +35,7 @@ async function watch(options) {
 const optionsBase = {
     absWorkingDir: __dirname,
     bundle: true,
+    packages: 'bundle',
     minify,
     platform: 'node',
     sourcemap: true,
@@ -48,7 +49,7 @@ async function buildAll() {
     const configs = [
         {
             ...optionsBase,
-            entryPoints: ['src/main.ts'],
+            entryPoints: ['src/main.mts'],
             outfile: 'dist/main.cjs',
         },
         {

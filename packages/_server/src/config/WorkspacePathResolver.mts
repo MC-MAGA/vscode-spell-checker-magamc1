@@ -1,12 +1,13 @@
-import { logError } from '@internal/common-utils/log.js';
+import { logError } from '@internal/common-utils/log';
+import { uriToFilePathOrHref } from '@internal/common-utils/uriHelper';
 import type { BaseSetting, Glob, GlobDef } from 'cspell-lib';
 import * as os from 'os';
-import * as Path from 'path';
+import type { WorkspaceFolder } from 'vscode-languageserver/node.js';
 import { URI as Uri } from 'vscode-uri';
 
-import type { WorkspaceFolder } from '../vscodeLanguageServer/index.cjs';
-import type { CSpellUserSettings } from './cspellConfig/index.mjs';
+import type { CSpellUserAndExtensionSettings } from './cspellConfig/index.mjs';
 import { extractDictionaryDefinitions, extractDictionaryList } from './customDictionaries.mjs';
+import { toDirURL } from './urlUtil.mjs';
 
 export type WorkspaceGlobResolverFn = (glob: Glob) => GlobDef;
 export type WorkspacePathResolverFn = (path: string) => string;
@@ -22,7 +23,7 @@ interface FolderPath {
     uri: Uri;
 }
 
-export function resolveSettings<T extends CSpellUserSettings>(settings: T, resolver: WorkspacePathResolver): T {
+export function resolveSettings<T extends CSpellUserAndExtensionSettings>(settings: T, resolver: WorkspacePathResolver): T {
     // Sections
     // - imports
     // - dictionary definitions (also nested in language settings)
@@ -72,7 +73,7 @@ function toFolderPath(w: WorkspaceFolder): FolderPath {
     const uri = Uri.parse(w.uri);
     return {
         name: w.name,
-        path: uri.fsPath,
+        path: uriToFilePathOrHref(uri),
         uri: uri,
     };
 }
@@ -102,36 +103,41 @@ function createWorkspaceNameToGlobResolver(
 ): (globRoot: string | undefined) => WorkspaceGlobResolverFn {
     const _folder = { ...folder };
     const _folders = [...folders];
-    return (globRoot: string | undefined) => {
-        const folderPairs = [['${workspaceFolder}', _folder.path] as [string, string]].concat(
-            _folders.map((folder) => [`\${workspaceFolder:${folder.name}}`, folder.path]),
+    return (globRoot: string | URL | undefined) => {
+        const folderPairs = [['${workspaceFolder}', toDirURL(_folder.path)] as [string, URL]].concat(
+            _folders.map((folder) => [`\${workspaceFolder:${folder.name}}`, toDirURL(folder.path)]),
         );
         workspaceRoot = workspaceRoot || _folder.path;
         const map = new Map(folderPairs);
         const regEx = /^\$\{workspaceFolder(?:[^}]*)\}/i;
         const root = resolveRoot(globRoot || '${workspaceFolder}');
 
-        function lookUpWorkspaceFolder(match: string): string {
+        function lookUpWorkspaceFolder(match: string): URL {
             const r = map.get(match);
             if (r !== undefined) return r;
             logError(`Failed to resolve ${match}`);
-            return match;
+            return toDirURL(match);
         }
 
-        function resolveRoot(globRoot: string | undefined): string | undefined {
+        function resolveRoot(globRoot: string | URL | undefined): URL | undefined {
+            if (globRoot instanceof URL) return globRoot;
+            globRoot = globRoot?.startsWith('~') ? os.homedir() + globRoot.slice(1) : globRoot;
             const matchRoot = globRoot?.match(regEx);
             if (matchRoot && globRoot) {
                 const workspaceRoot = lookUpWorkspaceFolder(matchRoot[0]);
-                return Path.join(workspaceRoot, globRoot.slice(matchRoot[0].length));
+                let path = globRoot.slice(matchRoot[0].length).replaceAll('\\', '/');
+                path = path.startsWith('/') ? path.slice(1) : path;
+                // console.log('matchRoot: %o', { globRoot, matchRoot, path, workspaceRoot: workspaceRoot.href });
+                return new URL(path, workspaceRoot);
             }
-            return globRoot;
+            return globRoot ? toDirURL(globRoot) : undefined;
         }
 
-        return (glob: Glob) => {
+        function resolver(glob: Glob) {
             if (typeof glob == 'string') {
                 glob = {
                     glob,
-                    root,
+                    root: root?.href,
                 };
             }
 
@@ -141,14 +147,20 @@ function createWorkspaceNameToGlobResolver(
                 return {
                     ...glob,
                     glob: glob.glob.slice(matchGlob[0].length),
-                    root,
+                    root: root.href,
                 };
             }
 
             return {
                 ...glob,
-                root: resolveRoot(glob.root),
+                root: resolveRoot(glob.root)?.href,
             };
+        }
+
+        return (glob: Glob) => {
+            const r = resolver(glob);
+            // console.log('resolveGlob: %o -> %o', glob, r);
+            return r;
         };
     };
 }
@@ -188,13 +200,13 @@ function createWorkspaceNameToPathResolver(
     };
 }
 
-function resolveCoreSettings<T extends CSpellUserSettings>(settings: T, resolver: WorkspacePathResolver): T {
+function resolveCoreSettings<T extends CSpellUserAndExtensionSettings>(settings: T, resolver: WorkspacePathResolver): T {
     // Sections
     // - imports
     // - dictionary definitions (also nested in language settings)
     // - globs (ignorePaths and Override filenames)
     // - override dictionaries
-    const newSettings: CSpellUserSettings = resolveCustomAndBaseSettings(settings, resolver);
+    const newSettings: CSpellUserAndExtensionSettings = resolveCustomAndBaseSettings(settings, resolver);
     // There is a more elegant way of doing this, but for now just change each section.
     newSettings.dictionaryDefinitions = resolveDictionaryPathReferences(newSettings.dictionaryDefinitions, resolver);
     newSettings.languageSettings = resolveLanguageSettings(newSettings.languageSettings, resolver);
@@ -208,11 +220,14 @@ function resolveBaseSettings<T extends BaseSetting>(settings: T, resolver: Works
     newSettings.dictionaryDefinitions = resolveDictionaryPathReferences(newSettings.dictionaryDefinitions, resolver);
     return shallowCleanObject(newSettings);
 }
-function resolveCustomAndBaseSettings<T extends CSpellUserSettings>(settings: T, resolver: WorkspacePathResolver): T {
+function resolveCustomAndBaseSettings<T extends CSpellUserAndExtensionSettings>(settings: T, resolver: WorkspacePathResolver): T {
     const newSettings = resolveBaseSettings(settings, resolver);
     return newSettings;
 }
-function resolveImportsToWorkspace(imports: CSpellUserSettings['import'], resolver: WorkspacePathResolver): CSpellUserSettings['import'] {
+function resolveImportsToWorkspace(
+    imports: CSpellUserAndExtensionSettings['import'],
+    resolver: WorkspacePathResolver,
+): CSpellUserAndExtensionSettings['import'] {
     if (!imports) return imports;
     const toImport = typeof imports === 'string' ? [imports] : imports;
     return toImport.map(resolver.resolveFile);
@@ -233,16 +248,19 @@ function resolveDictionaryPathReferences<T extends PathRef>(dictDefs: T[] | unde
     return dictDefs.map((def) => (def.path ? { ...def, path: resolver.resolveFile(def.path) } : def));
 }
 function resolveLanguageSettings(
-    langSettings: CSpellUserSettings['languageSettings'],
+    langSettings: CSpellUserAndExtensionSettings['languageSettings'],
     resolver: WorkspacePathResolver,
-): CSpellUserSettings['languageSettings'] {
+): CSpellUserAndExtensionSettings['languageSettings'] {
     if (!langSettings) return langSettings;
 
     return langSettings.map((langSetting) => {
         return shallowCleanObject({ ...resolveBaseSettings(langSetting, resolver) });
     });
 }
-function resolveOverrides(settings: CSpellUserSettings, resolver: WorkspacePathResolver): CSpellUserSettings['overrides'] {
+function resolveOverrides(
+    settings: CSpellUserAndExtensionSettings,
+    resolver: WorkspacePathResolver,
+): CSpellUserAndExtensionSettings['overrides'] {
     const { overrides } = settings;
     if (!overrides) return overrides;
 
@@ -266,6 +284,7 @@ function shallowCleanObject<T>(obj: T): T {
     const objMap = obj as Record<string, unknown>;
     for (const key of Object.keys(objMap)) {
         if (objMap[key] === undefined) {
+            // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
             delete objMap[key];
         }
     }

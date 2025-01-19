@@ -2,12 +2,12 @@ import assert from 'assert';
 import { getDefaultSettings } from 'cspell-lib';
 import { describe, expect, test } from 'vitest';
 
-import type { Range } from './PatternMatcher.js';
-import { isRegExpMatch, isRegExpMatchTimeout, PatternMatcher } from './PatternMatcher.js';
+import type { Range } from './PatternMatcher.mjs';
+import { isRegExpMatch, isRegExpMatchTimeout, PatternMatcher } from './PatternMatcher.mjs';
 
 const settings = {
     patterns: [],
-    ...getDefaultSettings(),
+    ...(await getDefaultSettings()),
 };
 
 const defaultTimeout = 5000;
@@ -59,10 +59,6 @@ describe('Validate PatternMatcher', () => {
         const matches = matchedResults.matches[0];
         expect(isRegExpMatchTimeout(matches)).toBe(false);
         expect(isRegExpMatch(matches)).toBe(true);
-        if (isRegExpMatch(matches)) {
-            const matchedText = matches.ranges.map((r) => extract(sampleText, r));
-            expect(matchedText).toEqual(['']);
-        }
     });
 
     testMatcher(

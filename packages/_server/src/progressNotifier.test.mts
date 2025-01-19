@@ -1,30 +1,39 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { Connection } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 
-import { createClientApi } from './clientApi.mjs';
+import type { MessageConnection, ServerSideApi } from './api.js';
 import { createProgressNotifier } from './progressNotifier.mjs';
+import { createServerApi } from './serverApi.mjs';
+import { createMockServerSideApi } from './test/test.api.js';
 
-vi.mock('./clientApi');
+vi.mock('./serverApi');
 
-const mockedCreateClientApi = vi.mocked(createClientApi);
+const mockedCreateClientApi = vi.mocked(createServerApi);
 // const mockedCreateConnection = jest.mocked(createConnection);
 
 mockedCreateClientApi.mockImplementation(() => {
-    return {
-        sendOnSpellCheckDocument: vi.fn(),
-        sendOnWorkspaceConfigForDocumentRequest: vi.fn(),
-    };
+    const mock: ServerSideApi = createMockServerSideApi();
+    return mock;
 });
 
-const stub: any = {};
-const connection = stub as Connection;
+const connection: MessageConnection = {
+    onNotification: vi.fn(),
+    onRequest: vi.fn(),
+    sendNotification: vi.fn(),
+    sendRequest: vi.fn((() => Promise.resolve(undefined)) as () => any),
+};
+
+// const mockConnection = vi.mocked(connection);
+
+const logger = {
+    log: vi.fn(),
+};
 
 describe('Validate Progress Notifier', () => {
     test('createProgressNotifier', async () => {
-        const clientApi = createClientApi(connection);
+        const clientApi = createServerApi(connection, {}, logger);
         const notifier = createProgressNotifier(clientApi);
-        const mockSendOnSpellCheckDocument = vi.mocked(clientApi.sendOnSpellCheckDocument);
+        const mockSendOnSpellCheckDocument = vi.mocked(clientApi.clientNotification.onSpellCheckDocument);
 
         expect(notifier.emitSpellCheckDocumentStep).toBeDefined();
 

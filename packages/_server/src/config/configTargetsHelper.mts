@@ -1,8 +1,6 @@
 import type { DictionaryDefinitionCustom } from '@cspell/cspell-types';
-import { toUri } from '@internal/common-utils/uriHelper.js';
-import { capitalize } from '@internal/common-utils/util.js';
-import { genSequence } from 'gensequence';
-import * as Path from 'path';
+import { toFileUri, toUri } from '@internal/common-utils/uriHelper';
+import { capitalize } from '@internal/common-utils/util';
 
 import type { WorkspaceConfigForDocument } from '../api.js';
 import type {
@@ -14,13 +12,26 @@ import type {
     ConfigTargetVSCode,
 } from './configTargets.mjs';
 import { ConfigKinds, ConfigScopes, weight } from './configTargets.mjs';
-import type { CSpellUserSettings } from './cspellConfig/index.mjs';
+import type { CSpellUserAndExtensionSettings } from './cspellConfig/index.mjs';
 import type { CSpellSettingsWithFileSource } from './documentSettings.mjs';
-import { extractCSpellFileConfigurations, extractTargetDictionaries } from './documentSettings.mjs';
+import { extractCSpellFileConfigurations, extractTargetDictionaries, filterExistingCSpellFileConfigurations } from './documentSettings.mjs';
 
-export function calculateConfigTargets(settings: CSpellUserSettings, workspaceConfig: WorkspaceConfigForDocument): ConfigTarget[] {
+export async function calculateConfigTargets(
+    settings: CSpellUserAndExtensionSettings,
+    workspaceConfig: WorkspaceConfigForDocument,
+    configFilesFound?: string[],
+): Promise<ConfigTarget[]> {
+    const found = new Set(configFilesFound);
+    function isFound(filename: string) {
+        if (found.has(filename)) return true;
+        const href = toFileUri(filename).toString();
+        return found.has(href);
+    }
     const targets: ConfigTarget[] = [];
-    const sources = extractCSpellFileConfigurations(settings).filter((cfg) => !cfg.readonly);
+    const possibleSources = extractCSpellFileConfigurations(settings).filter((cfg) => !cfg.readonly);
+    const sources = configFilesFound
+        ? possibleSources.filter((cfg) => isFound(cfg.source.filename))
+        : await filterExistingCSpellFileConfigurations(possibleSources);
     const dictionaries = extractTargetDictionaries(settings);
 
     targets.push(...workspaceConfigToTargets(workspaceConfig));
@@ -58,12 +69,16 @@ function* workspaceConfigToTargets(workspaceConfig: WorkspaceConfigForDocument):
     }
 }
 
+function basename(path: string): string {
+    return path.split(/[/\\]/g).slice(-1).join('');
+}
+
 function cspellToTargets(sources: CSpellSettingsWithFileSource[]): ConfigTargetCSpell[] {
     function toTarget(cfg: CSpellSettingsWithFileSource, index: number): ConfigTargetCSpell {
         return {
             kind: ConfigKinds.Cspell,
             scope: ConfigScopes.Unknown,
-            name: cfg.name || Path.basename(cfg.source.filename),
+            name: cfg.name || basename(cfg.source.filename),
             configUri: toUri(cfg.source.filename).toString(),
             has: {
                 words: cfg.words && true,
@@ -90,12 +105,10 @@ function dictionariesToTargets(dicts: DictionaryDefinitionCustom[]): ConfigTarge
         if (scopeMask & scopeMaskMap.unknown) yield { ...base, scope: ConfigScopes.Unknown };
     }
 
-    return genSequence(dicts).concatMap(dictToT).toArray();
+    return dicts.map(dictToT).flatMap((x) => [...x]);
 }
 
-type DictScopeMapKnown = {
-    [key in ConfigScope]: number;
-};
+type DictScopeMapKnown = Record<ConfigScope, number>;
 interface DictScopeMap extends DictScopeMapKnown {
     unknown: number;
 }

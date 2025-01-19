@@ -1,4 +1,4 @@
-// import { LogLevel, setLogLevel } from 'vscode-webview-rpc/logger';
+import { mount } from 'svelte';
 
 import App from './App.svelte';
 
@@ -13,7 +13,7 @@ function getView() {
     }
 }
 
-const app = new App({
+const app = mount(App, {
     target: document.body,
     props: {
         name: 'web world',

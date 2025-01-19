@@ -1,4 +1,5 @@
 # Project Words
+abortable
 acanthopterygious
 activitybar
 aeiouy
@@ -7,12 +8,14 @@ anonymize
 appid
 arraylength
 autocrlf
+autofix
 Bing
 cfml
 codeblock
 codicon
 codicons
 colorscheme
+comms
 cosmiconfig
 darkblue
 dcopy
@@ -35,6 +38,7 @@ gimsuy
 githubusercontent
 gitlab
 GOOG
+googleapis
 HSLA
 HSVA
 htaccess
@@ -60,20 +64,27 @@ myvariable
 nohoist
 noreply
 nospace
+nvmrc
 onfinally
+optionator
 outfile
 overridable
 OVSX
 paginator
 permalinks
+Positionals
 Preformat
 preinstall
+Pseudoterminal
 quickfix
 quotemark
 readonly
 restructuredtext
 rfdc
+RGBA
 rmwc
+RRGGBB
+RRGGBBAA
 scminput
 scrollbar
 shortname
@@ -82,6 +93,7 @@ sirv
 sourcemap
 squigglies
 streetsidesoftware
+stringifyable
 stylesheets
 subfolder
 subpath
@@ -93,6 +105,8 @@ tsbuildInfo
 tslib
 typechecking
 unelevated
+unindented
+unindents
 untracked
 untrusted
 uri's

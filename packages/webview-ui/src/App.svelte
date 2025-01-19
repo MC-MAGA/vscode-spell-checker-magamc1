@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { allComponents, provideVSCodeDesignSystem } from '@vscode/webview-ui-toolkit';
-  import { supportedViewsByName } from './api';
+  import { supportedViewsByName, getLogger } from './api';
   import CSpellInfo from './views/CSpellInfo.svelte';
   import HelloWorld from './views/HelloWorld.svelte';
   import Todo from './views/Todo.svelte';
-  import { createDisposableFromList } from 'utils-disposables';
+  import { createDisposableList } from 'utils-disposables';
   import { appState } from './state/appState';
-  import { LogLevel, setLogLevel } from 'webview-api';
+  import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
+  import { LogLevel } from 'utils-logger';
 
   // In order to use the Webview UI Toolkit web components they
   // must be registered with the browser (i.e. webview) using the
@@ -28,33 +29,44 @@
   // provideVSCodeDesignSystem().register(allComponents);
   provideVSCodeDesignSystem().register(allComponents);
 
-  export let name: string;
-  export let view: string | undefined | null;
+  interface Props {
+    name: string;
+    view: string | undefined | null;
+  }
 
-  setLogLevel(LogLevel.debug);
-  const logLevel = appState.logLevel();
+  let { name, view }: Props = $props();
 
-  const disposables = [logLevel.subscribe((level) => setLogLevel(level))];
-  const disposable = createDisposableFromList(disposables);
+  const disposable = createDisposableList();
+
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 1000,
+        enabled: true,
+      },
+    },
+  });
 
   onDestroy(() => {
     disposable.dispose();
   });
 </script>
 
-<main>
-  <div class="main-container">
-    {#if view == supportedViewsByName['hello-world']}
-      <HelloWorld {name} />
-    {:else if view == supportedViewsByName.todo}
-      <Todo />
-    {:else if view == supportedViewsByName['cspell-info']}
-      <CSpellInfo />
-    {:else}
-      <h1>Unknown View {view}</h1>
-    {/if}
-  </div>
-</main>
+<QueryClientProvider client={queryClient}>
+  <main>
+    <div class="main-container">
+      {#if view == supportedViewsByName['hello-world']}
+        <HelloWorld {name} />
+      {:else if view == supportedViewsByName.todo}
+        <Todo />
+      {:else if view == supportedViewsByName['cspell-info']}
+        <CSpellInfo />
+      {:else}
+        <h1>Unknown View {view}</h1>
+      {/if}
+    </div>
+  </main>
+</QueryClientProvider>
 
 <style>
   main {

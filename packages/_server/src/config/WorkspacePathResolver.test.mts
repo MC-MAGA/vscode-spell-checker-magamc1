@@ -1,19 +1,23 @@
-import { logError } from '@internal/common-utils/log.js';
+import { homedir } from 'node:os';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { logError } from '@internal/common-utils/log';
 import * as Path from 'path';
 import { describe, expect, type Mock, test, vi } from 'vitest';
+import type { WorkspaceFolder } from 'vscode-languageserver/node.js';
 import { URI as Uri } from 'vscode-uri';
 
-import type { WorkspaceFolder } from '../vscodeLanguageServer/index.cjs';
-import type { CSpellUserSettings, CustomDictionaries } from './cspellConfig/index.mjs';
+import type { CSpellUserAndExtensionSettings, CustomDictionaries } from './cspellConfig/index.mjs';
+import { normalizeWindowsRoot, normalizeWindowsUrl, toDirURL, uriToGlobRoot } from './urlUtil.mjs';
 import { createWorkspaceNamesResolver, debugExports, resolveSettings } from './WorkspacePathResolver.mjs';
 
 vi.mock('vscode-languageserver/node');
 vi.mock('./vscode.config');
-vi.mock('@internal/common-utils/log.js');
+vi.mock('@internal/common-utils/log');
 
 const mockLogError = logError as Mock;
 
-const cspellConfigInVsCode: CSpellUserSettings = {
+const cspellConfigInVsCode: CSpellUserAndExtensionSettings = {
     ignorePaths: ['${workspaceFolder:_server}/**/*.json'],
     import: [
         '${workspaceFolder:_server}/sampleSourceFiles/overrides/cspell.json',
@@ -22,7 +26,7 @@ const cspellConfigInVsCode: CSpellUserSettings = {
     enabledLanguageIds: ['typescript', 'javascript', 'php', 'json', 'jsonc'],
 };
 
-const cspellConfigCustomUserDictionary: CSpellUserSettings = {
+const cspellConfigCustomUserDictionary: CSpellUserAndExtensionSettings = {
     customUserDictionaries: [
         {
             name: 'Global Dictionary',
@@ -32,7 +36,7 @@ const cspellConfigCustomUserDictionary: CSpellUserSettings = {
     ],
 };
 
-const cspellConfigCustomWorkspaceDictionary: CSpellUserSettings = {
+const cspellConfigCustomWorkspaceDictionary: CSpellUserAndExtensionSettings = {
     customWorkspaceDictionaries: [
         {
             name: 'Workspace Dictionary',
@@ -46,7 +50,7 @@ const cspellConfigCustomWorkspaceDictionary: CSpellUserSettings = {
     ],
 };
 
-const cspellConfigCustomFolderDictionary: CSpellUserSettings = {
+const cspellConfigCustomFolderDictionary: CSpellUserAndExtensionSettings = {
     customFolderDictionaries: [
         {
             name: 'Folder Dictionary',
@@ -81,10 +85,14 @@ describe('Validate workspace substitution resolver', () => {
     const clientPath = Path.join(rootPath, 'client');
     const serverPath = Path.join(rootPath, '_server');
     const clientTestPath = Path.join(clientPath, 'test');
-    const rootFolderUri = Uri.file(rootPath);
-    const clientUri = Uri.file(clientPath);
-    const serverUri = Uri.file(serverPath);
-    const testUri = Uri.file(clientTestPath);
+    const rootFolderUrl = pathToFileURL(rootPath);
+    const clientUrl = pathToFileURL(clientPath);
+    const serverUrl = pathToFileURL(serverPath);
+    const testUrl = pathToFileURL(clientTestPath);
+    const rootFolderUri = Uri.parse(rootFolderUrl.href);
+    const clientUri = Uri.parse(clientUrl.href);
+    const serverUri = Uri.parse(serverUrl.href);
+    const testUri = Uri.parse(testUrl.href);
     const workspaceFolders = {
         root: {
             name: 'Root Folder',
@@ -105,15 +113,15 @@ describe('Validate workspace substitution resolver', () => {
     };
 
     const paths = {
-        root: uriToFsPath(workspaceFolders.root.uri),
-        client: uriToFsPath(workspaceFolders.client.uri),
-        server: uriToFsPath(workspaceFolders.server.uri),
-        test: uriToFsPath(workspaceFolders.test.uri),
+        root: uriToRoot(workspaceFolders.root.uri),
+        client: uriToRoot(workspaceFolders.client.uri),
+        server: uriToRoot(workspaceFolders.server.uri),
+        test: uriToRoot(workspaceFolders.test.uri),
     };
 
     const workspaces: WorkspaceFolder[] = [workspaceFolders.root, workspaceFolders.client, workspaceFolders.server, workspaceFolders.test];
 
-    const settingsImports: CSpellUserSettings = Object.freeze({
+    const settingsImports: CSpellUserAndExtensionSettings = Object.freeze({
         import: [
             'cspell.json',
             '${workspaceFolder}/cspell.json',
@@ -125,7 +133,7 @@ describe('Validate workspace substitution resolver', () => {
         ],
     });
 
-    const settingsIgnorePaths: CSpellUserSettings = Object.freeze({
+    const settingsIgnorePaths: CSpellUserAndExtensionSettings = Object.freeze({
         ignorePaths: [
             '**/node_modules/**',
             '${workspaceFolder}/node_modules/**',
@@ -138,7 +146,7 @@ describe('Validate workspace substitution resolver', () => {
         ],
     });
 
-    const settingsDictionaryDefinitions: CSpellUserSettings = Object.freeze({
+    const settingsDictionaryDefinitions: CSpellUserAndExtensionSettings = Object.freeze({
         dictionaryDefinitions: [
             {
                 name: 'My Dictionary',
@@ -155,7 +163,7 @@ describe('Validate workspace substitution resolver', () => {
         ].map((f) => Object.freeze(f)),
     });
 
-    const settingsDictionaryDefinitions2: CSpellUserSettings = Object.freeze({
+    const settingsDictionaryDefinitions2: CSpellUserAndExtensionSettings = Object.freeze({
         dictionaryDefinitions: (settingsDictionaryDefinitions.dictionaryDefinitions || [])
             .concat([
                 {
@@ -175,7 +183,7 @@ describe('Validate workspace substitution resolver', () => {
             .map((f) => Object.freeze(f)),
     });
 
-    const settingsLanguageSettings: CSpellUserSettings = Object.freeze({
+    const settingsLanguageSettings: CSpellUserAndExtensionSettings = Object.freeze({
         languageSettings: [
             {
                 languageId: 'typescript',
@@ -184,7 +192,7 @@ describe('Validate workspace substitution resolver', () => {
         ].map((f) => Object.freeze(f)),
     });
 
-    const overrides: CSpellUserSettings['overrides'] = [
+    const overrides: CSpellUserAndExtensionSettings['overrides'] = [
         {
             filename: ['*.md', '**/*.ts', '**/*.js'],
             languageSettings: settingsLanguageSettings.languageSettings,
@@ -217,7 +225,7 @@ describe('Validate workspace substitution resolver', () => {
         html: false,
     } as const;
 
-    const settingsOverride: CSpellUserSettings = {
+    const settingsOverride: CSpellUserAndExtensionSettings = {
         overrides: overrides.map((f) => Object.freeze(f)),
     };
 
@@ -251,11 +259,11 @@ describe('Validate workspace substitution resolver', () => {
         // '${workspaceFolder:Server}/samples/**',
         // '${workspaceFolder:client-test}/**/*.json',
         expect(result.ignorePaths).toEqual([
-            { glob: '**/node_modules/**', root: uriToFsPath(workspaceFolders.client.uri) },
-            { glob: '/node_modules/**', root: uriToFsPath(workspaceFolders.client.uri) },
-            { glob: '/samples/**', root: uriToFsPath(workspaceFolders.server.uri) },
-            { glob: '/**/*.json', root: uriToFsPath(workspaceFolders.test.uri) },
-            { glob: 'dist/**', root: uriToFsPath(workspaceFolders.server.uri) },
+            { glob: '**/node_modules/**', root: uriToRoot(workspaceFolders.client.uri) },
+            { glob: '/node_modules/**', root: uriToRoot(workspaceFolders.client.uri) },
+            { glob: '/samples/**', root: uriToRoot(workspaceFolders.server.uri) },
+            { glob: '/**/*.json', root: uriToRoot(workspaceFolders.test.uri) },
+            { glob: 'dist/**', root: uriToRoot(workspaceFolders.server.uri) },
         ]);
     });
 
@@ -263,7 +271,7 @@ describe('Validate workspace substitution resolver', () => {
         files                               | globRoot                   | expected
         ${undefined}                        | ${undefined}               | ${undefined}
         ${['**']}                           | ${undefined}               | ${[{ glob: '**', root: paths.client }]}
-        ${['**']}                           | ${'~/glob-root'}           | ${[{ glob: '**', root: '~/glob-root' }]}
+        ${['**']}                           | ${'~/glob-root'}           | ${[{ glob: '**', root: normalizeWindowsUrl(new URL('glob-root/', pathToFileURL(homedir() + '/'))).href }]}
         ${['**']}                           | ${'${workspaceFolder}/..'} | ${[{ glob: '**', root: paths.root }]}
         ${['${workspaceFolder}/**']}        | ${''}                      | ${[{ glob: '/**', root: paths.client }]}
         ${['${workspaceFolder}/**']}        | ${undefined}               | ${[{ glob: '/**', root: paths.client }]}
@@ -272,7 +280,7 @@ describe('Validate workspace substitution resolver', () => {
     `('resolveSettings files $files $globRoot', ({ files, globRoot, expected }) => {
         const root = '/config root';
         const resolver = createWorkspaceNamesResolver(workspaceFolders.client, workspaces, root);
-        const settings: CSpellUserSettings = { globRoot, files };
+        const settings: CSpellUserAndExtensionSettings = { globRoot, files };
         const result = resolveSettings(settings, resolver);
         expect(result.files).toEqual(expected);
     });
@@ -320,36 +328,36 @@ describe('Validate workspace substitution resolver', () => {
             [
                 {
                     glob: '*.md',
-                    root: uriToFsPath(workspaceFolders.client.uri),
+                    root: uriToGlobRoot(workspaceFolders.client.uri),
                 },
                 {
                     glob: '**/*.ts',
-                    root: uriToFsPath(workspaceFolders.client.uri),
+                    root: uriToGlobRoot(workspaceFolders.client.uri),
                 },
                 {
                     glob: '**/*.js',
-                    root: uriToFsPath(workspaceFolders.client.uri),
+                    root: uriToGlobRoot(workspaceFolders.client.uri),
                 },
             ],
             {
                 glob: '/docs/nl_NL/**',
-                root: uriToFsPath(workspaceFolders.client.uri),
+                root: uriToGlobRoot(workspaceFolders.client.uri),
             },
             [
                 {
                     glob: '/**/*.config.json',
-                    root: uriToFsPath(workspaceFolders.client.uri),
+                    root: uriToGlobRoot(workspaceFolders.client.uri),
                 },
                 {
                     glob: '**/*.config.json',
-                    root: uriToFsPath(workspaceFolders.server.uri),
+                    root: uriToGlobRoot(workspaceFolders.server.uri),
                 },
             ],
         ]);
     });
 
     test('resolve custom dictionaries', () => {
-        const settings: CSpellUserSettings = {
+        const settings: CSpellUserAndExtensionSettings = {
             ...cspellConfigInVsCode,
             ...settingsDictionaryDefinitions2,
             ...cspellConfigCustomFolderDictionary,
@@ -413,7 +421,7 @@ describe('Validate workspace substitution resolver', () => {
     });
 
     test('resolve custom dictionaries by name', () => {
-        const settings: CSpellUserSettings = {
+        const settings: CSpellUserAndExtensionSettings = {
             ...cspellConfigInVsCode,
             ...settingsDictionaryDefinitions,
             customWorkspaceDictionaries: ['Project Dictionary'],
@@ -443,7 +451,7 @@ describe('Validate workspace substitution resolver', () => {
 
     test('Unresolved workspaceFolder', () => {
         mockLogError.mockReset();
-        const settings: CSpellUserSettings = {
+        const settings: CSpellUserAndExtensionSettings = {
             ...cspellConfigInVsCode,
             ...settingsDictionaryDefinitions,
             customWorkspaceDictionaries: [{ name: 'Unknown Dictionary' }],
@@ -462,11 +470,11 @@ describe('Validate workspace substitution resolver', () => {
         expect(mockLogError).toHaveBeenCalledWith('Failed to resolve ${workspaceFolder:_server}');
     });
 
-    function uriToFsPath(u: string | Uri): string {
+    function uriToRoot(u: string | Uri): string {
         if (typeof u === 'string') {
             u = Uri.parse(u);
         }
-        return u.fsPath;
+        return toDirURL(u).href;
     }
 
     function normalizePath<T extends { path?: string }>(values?: T[]): T[] | undefined {
@@ -483,6 +491,6 @@ describe('Validate workspace substitution resolver', () => {
     }
 
     function p(path: string): string {
-        return Uri.file(path).fsPath;
+        return normalizeWindowsRoot(fileURLToPath(pathToFileURL(path)));
     }
 });

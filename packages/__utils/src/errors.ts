@@ -1,7 +1,7 @@
-function getTypeOf(t: unknown) {
+function _getTypeOf(t: unknown) {
     return typeof t;
 }
-type TypeOfTypes = ReturnType<typeof getTypeOf>;
+type TypeOfTypes = ReturnType<typeof _getTypeOf>;
 
 type AllowedTypes = Partial<Record<TypeOfTypes, true>>;
 
@@ -21,18 +21,18 @@ interface ErrorCodeException {
 
 export function isErrorCodeException(e: unknown): e is ErrorCodeException {
     if (!e || typeof e !== 'object') return false;
-    return typeof (<ErrorCodeException>e).code === 'string';
+    return typeof (e as ErrorCodeException).code === 'string';
 }
 
 export function isErrnoException(e: unknown): e is NodeJS.ErrnoException {
     if (!e || typeof e !== 'object') return false;
-    const ex = <NodeJS.ErrnoException>e;
+    const ex = e as NodeJS.ErrnoException;
     return (
         typeof ex.name == 'string' &&
         typeof ex.message == 'string' &&
-        typeof ex.errno in allowNumberOrUndefined &&
-        typeof ex.code in allowStringOrUndefined &&
-        typeof ex.path in allowStringOrUndefined &&
-        typeof ex.stack in allowStringOrUndefined
+        (typeof ex.errno) in allowNumberOrUndefined &&
+        (typeof ex.code) in allowStringOrUndefined &&
+        (typeof ex.path) in allowStringOrUndefined &&
+        (typeof ex.stack) in allowStringOrUndefined
     );
 }

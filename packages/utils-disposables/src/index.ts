@@ -1,9 +1,20 @@
-export type { DisposableProposed as Disposable, DisposableClassic, DisposableHybrid, DisposableLike, DisposeFn } from './disposable.js';
+export type {
+    DisposableProposed as Disposable,
+    DisposableClassic,
+    DisposableHybrid,
+    DisposableLike,
+    DisposeFn,
+    ExcludeDisposableHybrid,
+    Logger,
+} from './disposable.js';
 export {
     createDisposable,
     createDisposableFromList,
     createDisposeMethodFromList,
     disposeOf,
-    InheritableDisposable,
+    getDisposableTs,
     injectDisposable,
+    makeDisposable,
+    setLogger,
 } from './disposable.js';
+export { createDisposableList, DisposableList, InheritableDisposable } from './DisposableList.js';

@@ -1,3 +1,4 @@
+/* eslint-disable no-irregular-whitespace */
 export interface SpellCheckerShouldCheckDocSettings {
     /**
      * The maximum line length.
@@ -26,7 +27,7 @@ export interface SpellCheckerShouldCheckDocSettings {
      * Absolute word breaks match: `/[\s,{}[\]]/`, i.e. spaces or braces.
      *
      *
-     * **Error Message:** _Maximum Word Length is Too High._
+     * **Error Message:** _Maximum word length exceeded._
      *
      *
      * If you are seeing this message, it means that the file contains a very long line
@@ -45,7 +46,7 @@ export interface SpellCheckerShouldCheckDocSettings {
      * Absolute word breaks match: `/[\s,{}[\]]/`
      *
      *
-     * **Error Message:** _Average Word Size is Too High._
+     * **Error Message:** _Average word length is too long._
      *
      *
      * If you are seeing this message, it means that the file contains mostly long lines
@@ -55,4 +56,14 @@ export interface SpellCheckerShouldCheckDocSettings {
      * @default 80
      */
     blockCheckingWhenAverageChunkSizeGreaterThan?: number;
+
+    /**
+     * Spell check VS Code system files.
+     * These include:
+     * - `vscode-userdata:/**​/settings.json`
+     * - `vscode-userdata:/**​/keybindings.json`
+     * @scope application
+     * @default false
+     */
+    checkVSCodeSystemFiles?: boolean;
 }
